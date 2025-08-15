@@ -1,0 +1,30 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.egg-info/
+
+# Distribution / packaging
+.Python
+build/
+dist/
+.venv/
+
+# Installer logs
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Editor-specific files
+.idea/             # PyCharm / IntelliJ IDEA
+.vscode/           # VS Code
+*.sublime-project
+*.sublime-workspace
+.DS_Store          # macOS specific
+Thumbs.db          # Windows specific
