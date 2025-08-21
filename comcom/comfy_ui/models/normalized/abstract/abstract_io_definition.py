@@ -1,0 +1,2 @@
+class AbstractIODefinition:
+    pass

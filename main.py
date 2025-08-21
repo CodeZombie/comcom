@@ -3,7 +3,7 @@ import json
 # import aiohttp
 
 #from transformers.workflows import Workflow
-from comcom.comfy_ui.workflow_graph.workflow import ComfyWorkflow
+from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import ComfyWorkflow
 from comcom.comfy_ui.definition.node_definitions import NodeDefinitions
 from comcom.comfy_ui.api_graph.workflow import ApiWorkflow
 #from transformers.workflow import Workflow
