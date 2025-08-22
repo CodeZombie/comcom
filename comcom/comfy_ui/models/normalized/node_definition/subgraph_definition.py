@@ -2,9 +2,9 @@ from typing import List, Self
 from dataclasses import dataclass
 import copy
 
-from .node import NormalizedNode
-from .link_input import NormalizedLinkInput
-from .output import NormalizedOutput
+from ..workflow.node import NormalizedNode
+from ..workflow.link_input import NormalizedLinkInput
+from ..workflow.output import NormalizedOutput
 
 from comcom.comfy_ui.models.normalized.node_definition.node_definition import NormalizedNodeDefinition
 from comcom.comfy_ui.models.normalized.node_definition.slot_definition import NormalizedSlotDefinition
@@ -12,21 +12,27 @@ from comcom.comfy_ui.models.normalized.node_definition.slot_definition import No
 from comcom.comfy_ui.models.normalized.utils.bypass import Bypass
 
 @dataclass
-class NormalizedSubgraphDefinition:
-    id: str
-    revision: int
+class NormalizedSubgraphDefinition(NormalizedNodeDefinition):
     nodes: list[NormalizedNode]
-    version: float
     incoming: List[NormalizedOutput]
     outgoing: List[NormalizedLinkInput]
-    subgraph_definitions: List[Self]
 
-    # def get_incoming(self, name: str) -> NormalizedOutput:
-    #     return next((incoming for incoming in self.incoming if incoming.name == name), None)
+    def __init__(
+            self, 
+            name: str,
+            nodes: List[NormalizedNode],
+            incoming: List[NormalizedOutput],
+            outgoing: List[NormalizedLinkInput]):
+        super().__init__(
+            name=name,
+            display_name="",
+            output_node=False,
+            input_slot_definitions=[inc.to_slot_definition() for inc in incoming],
+            output_slot_definitions=[out.to_slot_definition() for out in outgoing])
+        self.nodes = nodes
+        self.incoming = incoming
+        self.outgoing = outgoing
 
-    # def get_outgoing(self, name: str) -> NormalizedLinkInput:
-    #     return next((outgoing for outgoing in self.outgoing if outgoing.name == name), None)
-    
     def to_node_definition(self) -> NormalizedNodeDefinition:
         return NormalizedNodeDefinition(
             name=self.id,
@@ -37,7 +43,6 @@ class NormalizedSubgraphDefinition:
             is_subgraph=True
         )
     
-    # 
     def get_internal_bypasses(self, subgraph_instance: NormalizedNode) -> dict[str, str]:
         bypasses: List[Bypass] = []
 
@@ -99,16 +104,6 @@ class NormalizedSubgraphDefinition:
                 subgraph_ext_bypasses = subgraph_definition.get_external_bypasses(subgraph_instance_node)
                 for node in expanded_nodes:
                     node.apply_bypasses(subgraph_ext_bypasses)
-
-
-            # # Expand all subgraph instances within this subgraph definition
-            # for subgraph_definition in self.subgraph_definitions:
-            #     for node in subgraph_instances:
-            #         if node.type == subgraph_definition.id:
-            #             expanded_nodes.append(subgraph_definition.as_normalized_node_list(node, node_definitions, prefix))
-            #             subgraph_output_bypass_map = subgraph_definition.get_output_bypass_map(node)
-            #             for node in expanded_nodes:
-            #                 node.apply_bypass_map(subgraph_output_bypass_map)
 
             internal_bypasses = self.get_internal_bypasses(subgraph_instance)
             for expanded_node in expanded_nodes:

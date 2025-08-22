@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from comcom.comfy_ui.models.common.input import Input
 from comcom.comfy_ui.models.common.link import Link
-
+from comcom.comfy_ui.models.normalized.node_definition.slot_definition import NormalizedSlotDefinition
 @dataclass
 class NormalizedInput:
     name: str
@@ -39,3 +39,10 @@ class NormalizedInput:
     def apply_prefix_to_link(self, prefix):
         if self.is_link and self.value != None:
             self.value = "{}:{}".format(prefix, self.value)
+
+    def to_slot_definition(self):
+        return NormalizedSlotDefinition(
+            name=self.name,
+            type=self.type,
+            metadata={}
+        )
