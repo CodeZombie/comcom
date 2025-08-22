@@ -3,6 +3,8 @@ from pydantic import BaseModel, field_validator
 
 from .input_definition import Comfy_v1_0_InputDefinition
 
+from comcom.comfy_ui.models.normalized.node_definition.slot_definition import NormalizedSlotDefinition
+
 class _VirtualInputDefinitionInsertionRule:
     def __init__(self, match_type: str, match_metadata: dict[str, Any], new_input_name: str, new_input_type: str):
         self.match_type = match_type
@@ -42,4 +44,5 @@ class Comfy_v1_0_InputDefinitions(BaseModel):
         return self.required | self.optional
     
     def to_normalized(self) -> Dict[str, Comfy_v1_0_InputDefinition]:
-        return [input_def.to_normalized() for input_def in self.all.values()]
+        return [NormalizedSlotDefinition(name=input_name, type=input_def.type, metadata=input_def.metadata) for input_name, input_def in self.all.items()]
+    

@@ -13,3 +13,6 @@ class NormalizedLinkInput:
     def is_resolved(self):
         return self.source_node_id != None and self.source_node_output_index != None
     
+    def apply_prefix_to_link(self, prefix):
+        if self.link != None:
+            self.link = "{}:{}".format(prefix, self.link)

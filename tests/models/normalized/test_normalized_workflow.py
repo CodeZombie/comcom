@@ -3,6 +3,7 @@ import pytest
 from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import Comfy_V0_4_Workflow
 from comcom.comfy_ui.models.normalized.workflow.workflow import NormalizedWorkflow
 from comcom.comfy_ui.models.normalized.workflow.subgraph_definition import NormalizedSubgraphDefinition
+from comcom.comfy_ui.models.raw.node_definitions.version_1_0.node_definitions import Comfy_v1_0_NodeDefinitions
 
 TWO_NODES_WORKFLOW_JSON = """
 {
@@ -160,23 +161,26 @@ TWO_NODES_WORKFLOW_JSON = """
 """
 
 @pytest.fixture
-def workflow():
-    return Comfy_V0_4_Workflow.model_validate_json(TWO_NODES_WORKFLOW_JSON)
+def node_definitions():
+    return Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
+
+@pytest.fixture
+def workflow(node_definitions):
+    return Comfy_V0_4_Workflow.model_validate_json(TWO_NODES_WORKFLOW_JSON).to_normalized(node_definitions)
 
 def test_workflow_properties(workflow):
     assert workflow.id == "bb53cfff-fb44-4427-a715-5a58e1dcfb18"
     assert workflow.revision == 0
-    assert len(workflow.get_node('3').link_inputs) == 1
+    assert len(workflow.get_node('3').inputs) == 1
     assert len(workflow.get_node('3').outputs) == 3
 
 def test_nodes(workflow):
     assert len(workflow.nodes) == 2
 
-# def test_convert_version_0_4_workflow_to_normalized(workflow):
-#     normalized_workflow = workflow.to_normalized()
-#     assert isinstance(normalized_workflow, NormalizedWorkflow)
-#     assert normalized_workflow.id == workflow.id
-#     assert normalized_workflow.revision == workflow.revision
-#     assert normalized_workflow.version == workflow.version
-#     assert len(normalized_workflow.subgraph_definitions) == len(workflow.subgraph_definitions)
-#     assert len(normalized_workflow.nodes) == 2
+def test_convert_version_0_4_workflow_to_normalized(workflow):
+    assert isinstance(workflow, NormalizedWorkflow)
+    assert workflow.id == workflow.id
+    assert workflow.revision == workflow.revision
+    assert workflow.version == workflow.version
+    assert len(workflow.subgraph_definitions) == len(workflow.subgraph_definitions)
+    assert len(workflow.nodes) == 2

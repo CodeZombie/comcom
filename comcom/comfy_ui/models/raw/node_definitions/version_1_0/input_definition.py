@@ -1,6 +1,8 @@
 from typing import Dict, List, Any
 from pydantic import RootModel
 
+
+
 class Comfy_v1_0_InputDefinition(RootModel[List[str | List | Dict[str, Any] | None]]):
     def __iter__(self):
         return iter(self.root)

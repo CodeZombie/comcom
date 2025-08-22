@@ -1,6 +1,7 @@
 import pytest
 
 from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import Comfy_V0_4_Workflow
+from comcom.comfy_ui.models.raw.node_definitions.version_1_0.node_definitions import Comfy_v1_0_NodeDefinitions
 from comcom.comfy_ui.models.normalized.workflow.workflow import NormalizedWorkflow
 from comcom.comfy_ui.models.normalized.workflow.subgraph_definition import NormalizedSubgraphDefinition
 
@@ -44,7 +45,7 @@ SUBGRAPH_WORKFLOW_JSON = """
         "Node name for S&R": "LoadImage"
       },
       "widgets_values": [
-        "2025-04-14_21-25-34-novaFurryXL_illustriousV6b-565926541.png",
+        "image.png",
         "image"
       ]
     },
@@ -88,7 +89,7 @@ SUBGRAPH_WORKFLOW_JSON = """
         "Node name for S&R": "CheckpointLoaderSimple"
       },
       "widgets_values": [
-        "Anything-V3.0-pruned-fp16.safetensors"
+        "diffusion_model.safetensors"
       ]
     },
     {
@@ -625,13 +626,17 @@ SUBGRAPH_WORKFLOW_JSON = """
 """
 
 @pytest.fixture
+def node_definitions():
+    return Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
+
+@pytest.fixture
 def workflow():
     return Comfy_V0_4_Workflow.model_validate_json(SUBGRAPH_WORKFLOW_JSON)
 
-def test_convert_version_0_4_subgraph_definition_to_normalized(workflow):
+def test_convert_version_0_4_subgraph_definition_to_normalized(workflow, node_definitions):
     assert len(workflow.subgraph_definitions) == 1
     raw_subgraph_definition = workflow.subgraph_definitions[0]
-    normalized_workflow = workflow.to_normalized()
+    normalized_workflow = workflow.to_normalized(node_definitions)
     normalized_subgraph_definition = normalized_workflow.subgraph_definitions[0]
 
     assert isinstance(normalized_subgraph_definition, NormalizedSubgraphDefinition)

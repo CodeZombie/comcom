@@ -49,3 +49,17 @@ So let's spend a bit of time deciding what formats should look like and which ab
 
 NOTE:
 the `inputs` in Subgraph Definitions are not actually `inputs` - they describe a bit of data flowing out. And `outputs` are really inputs. They accept a piece of data flowing in. We should call them something else. Maybe `incoming_slots: Output = []` and `outgoing_slots: Input = []` ? Yeah I like that.
+
+/comcom
+    /comfy_ui
+        /graph
+            /abstract
+                /workflow
+                /definitions
+            /workflow_v0_4
+            /workflow_v1_0+
+            /definitions_v1_0
+            /definitions_v2_0
+        /api
+            workflow.py
+            

@@ -1,44 +1,11 @@
-import json
-# import asyncio
-# import aiohttp
-
-#from transformers.workflows import Workflow
-# from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import ComfyWorkflow
-# from comcom.comfy_ui.definition.node_definitions import NodeDefinitions
-# from comcom.comfy_ui.api_graph.workflow import ApiWorkflow
-#from transformers.workflow import Workflow
-
-# with open('workflow.json', 'r') as file:
-#     workflow = json.load(file)
-
-# wrapped_workflow = {
-#     "prompt": workflow
-# }
-
-
-# async def do_req(url, payload):
-#     async with aiohttp.ClientSession() as session:
-#         async with session.post(url, data=payload) as resp:
-#             print(resp.status)
-#             print(await resp.text())
-
-# payload = json.dumps(wrapped_workflow).encode('utf-8')
-
-# asyncio.run(do_req("http://127.0.0.1:8188/prompt", payload))
-
-# Load definitions
-# node_definitions = NodeDefinitions.model_validate_json(open('object_info.json').read())
-# comfy_workflow = ComfyWorkflow.model_validate_json(open('simple_sub_x.json').read())
-# api_workflow = ApiWorkflow.from_comfy_workflow(comfy_workflow, node_definitions)
-# print(api_workflow)
-
+import pytest
 
 from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import Comfy_V0_4_Workflow
 from comcom.comfy_ui.models.normalized.workflow.workflow import NormalizedWorkflow
 from comcom.comfy_ui.models.normalized.workflow.subgraph_definition import NormalizedSubgraphDefinition
 from comcom.comfy_ui.models.raw.node_definitions.version_1_0.node_definitions import Comfy_v1_0_NodeDefinitions
 
-WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
+WORKFLOW_WITH_SUBGRAPH_WIDGETS_JSON = """
 {
   "id": "02439884-a1c5-449e-bf43-6e05377a45ca",
   "revision": 0,
@@ -86,8 +53,8 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
       "id": 3,
       "type": "PreviewImage",
       "pos": [
-        1297.4132080078125,
-        463.23114013671875
+        1269.428466796875,
+        423.43408203125
       ],
       "size": [
         140,
@@ -106,20 +73,23 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
       "outputs": [],
       "properties": {
         "Node name for S&R": "PreviewImage"
-      }
+      },
+      "widgets_values": []
     },
     {
       "id": 4,
       "type": "958f4d94-38a9-4ed2-9e09-2de399857e0c",
       "pos": [
-        932.72509765625,
-        458.424560546875
+        867.40087890625,
+        415.3589782714844
       ],
       "size": [
-        140,
-        26
+        210,
+        58
       ],
-      "flags": {},
+      "flags": {
+        "collapsed": false
+      },
       "order": 1,
       "mode": 0,
       "inputs": [
@@ -139,7 +109,9 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
         }
       ],
       "properties": {},
-      "widgets_values": []
+      "widgets_values": [
+        "none"
+      ]
     }
   ],
   "links": [
@@ -169,7 +141,7 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
         "state": {
           "lastGroupId": 0,
           "lastNodeId": 3,
-          "lastLinkId": 2,
+          "lastLinkId": 3,
           "lastRerouteId": 0
         },
         "revision": 0,
@@ -181,7 +153,7 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
             690.6282958984375,
             441.42457580566406,
             120,
-            60
+            80
           ]
         },
         "outputNode": {
@@ -203,8 +175,20 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
             ],
             "localized_name": "image",
             "pos": {
-              "0": 55,
-              "1": 20
+              "0": 790.6282958984375,
+              "1": 461.424560546875
+            }
+          },
+          {
+            "id": "3184dcba-d8f9-479f-8f56-f271f1aba328",
+            "name": "rotation",
+            "type": "COMBO",
+            "linkIds": [
+              3
+            ],
+            "pos": {
+              "0": 790.6282958984375,
+              "1": 481.424560546875
             }
           }
         ],
@@ -218,8 +202,8 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
             ],
             "localized_name": "IMAGE",
             "pos": {
-              "0": 20,
-              "1": 20
+              "0": 1220.6282958984375,
+              "1": 461.424560546875
             }
           }
         ],
@@ -229,8 +213,8 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
             "id": 2,
             "type": "ImageRotate",
             "pos": [
-              870.6282958984375,
-              457.4245910644531
+              885.628662109375,
+              456.9407043457031
             ],
             "size": [
               270,
@@ -245,6 +229,15 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
                 "name": "image",
                 "type": "IMAGE",
                 "link": 1
+              },
+              {
+                "localized_name": "rotation",
+                "name": "rotation",
+                "type": "COMBO",
+                "widget": {
+                  "name": "rotation"
+                },
+                "link": 3
               }
             ],
             "outputs": [
@@ -282,6 +275,14 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
             "target_id": -20,
             "target_slot": 0,
             "type": "IMAGE"
+          },
+          {
+            "id": 3,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 2,
+            "target_slot": 1,
+            "type": "COMBO"
           }
         ],
         "extra": {}
@@ -293,8 +294,8 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
     "ds": {
       "scale": 1.3777431100456294,
       "offset": [
-        -40.7685658938395,
-        -50.7207784300051
+        -36.99844805912934,
+        -39.39031805804839
       ]
     },
     "frontendVersion": "1.24.0-1"
@@ -303,9 +304,35 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
 }
 """
 
-normalized_node_definitions = Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
-workflow = Comfy_V0_4_Workflow.model_validate_json(WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON).to_normalized(normalized_node_definitions).to_common(normalized_node_definitions)
-print(workflow)
-print(workflow.as_api_dict())
-print("---")
-print(workflow.as_json())
+@pytest.fixture
+def workflow():
+    normalized_node_definitions = Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
+    return Comfy_V0_4_Workflow.model_validate_json(WORKFLOW_WITH_SUBGRAPH_WIDGETS_JSON).to_normalized(normalized_node_definitions).to_common(normalized_node_definitions)
+
+def test_workflow_properties(workflow):
+    assert workflow.id == "02439884-a1c5-449e-bf43-6e05377a45ca"
+    assert len(workflow.nodes) == 3
+
+    image_rotate_node = workflow.get_node_by_id("4:2")
+    assert image_rotate_node
+    assert image_rotate_node.id == "4:2"
+    assert image_rotate_node.get_input_by_name('image')
+    assert image_rotate_node.get_input_by_name('image').name == 'image'
+    assert image_rotate_node.get_input_by_name('image').is_link == True
+    assert image_rotate_node.get_input_by_name('image').value.source_node_id == '1'
+    assert image_rotate_node.get_input_by_name('image').value.source_node_output_name == 'IMAGE'
+
+    assert image_rotate_node.get_input_by_name('rotation')
+    assert image_rotate_node.get_input_by_name('rotation').name == 'rotation'
+    assert image_rotate_node.get_input_by_name('rotation').is_link == False
+    assert image_rotate_node.get_input_by_name('rotation').value == 'none'
+    
+
+    preview_image = workflow.get_node_by_id('3')
+    assert preview_image
+    assert preview_image.id == '3'
+    assert preview_image.get_input_by_name('images')
+    assert preview_image.get_input_by_name('images').name == 'images'
+    assert preview_image.get_input_by_name('images').is_link == True
+    assert preview_image.get_input_by_name('images').value.source_node_id == '4:2'
+    assert preview_image.get_input_by_name('images').value.source_node_output_name == 'IMAGE'

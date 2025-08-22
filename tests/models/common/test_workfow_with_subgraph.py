@@ -1,37 +1,4 @@
-import json
-# import asyncio
-# import aiohttp
-
-#from transformers.workflows import Workflow
-# from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import ComfyWorkflow
-# from comcom.comfy_ui.definition.node_definitions import NodeDefinitions
-# from comcom.comfy_ui.api_graph.workflow import ApiWorkflow
-#from transformers.workflow import Workflow
-
-# with open('workflow.json', 'r') as file:
-#     workflow = json.load(file)
-
-# wrapped_workflow = {
-#     "prompt": workflow
-# }
-
-
-# async def do_req(url, payload):
-#     async with aiohttp.ClientSession() as session:
-#         async with session.post(url, data=payload) as resp:
-#             print(resp.status)
-#             print(await resp.text())
-
-# payload = json.dumps(wrapped_workflow).encode('utf-8')
-
-# asyncio.run(do_req("http://127.0.0.1:8188/prompt", payload))
-
-# Load definitions
-# node_definitions = NodeDefinitions.model_validate_json(open('object_info.json').read())
-# comfy_workflow = ComfyWorkflow.model_validate_json(open('simple_sub_x.json').read())
-# api_workflow = ApiWorkflow.from_comfy_workflow(comfy_workflow, node_definitions)
-# print(api_workflow)
-
+import pytest
 
 from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import Comfy_V0_4_Workflow
 from comcom.comfy_ui.models.normalized.workflow.workflow import NormalizedWorkflow
@@ -303,9 +270,35 @@ WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON = """
 }
 """
 
-normalized_node_definitions = Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
-workflow = Comfy_V0_4_Workflow.model_validate_json(WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON).to_normalized(normalized_node_definitions).to_common(normalized_node_definitions)
-print(workflow)
-print(workflow.as_api_dict())
-print("---")
-print(workflow.as_json())
+@pytest.fixture
+def workflow():
+    normalized_node_definitions = Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
+    return Comfy_V0_4_Workflow.model_validate_json(WORKFLOW_WITH_SIMPLE_SUBGRAPH_JSON).to_normalized(normalized_node_definitions).to_common(normalized_node_definitions)
+
+def test_workflow_properties(workflow):
+    assert workflow.id == "02439884-a1c5-449e-bf43-6e05377a45ca"
+    assert len(workflow.nodes) == 3
+
+    image_rotate_node = workflow.get_node_by_id("4:2")
+    assert image_rotate_node
+    assert image_rotate_node.id == "4:2"
+    assert image_rotate_node.get_input_by_name('image')
+    assert image_rotate_node.get_input_by_name('image').name == 'image'
+    assert image_rotate_node.get_input_by_name('image').is_link == True
+    print(image_rotate_node.get_input_by_name('image'))
+    assert image_rotate_node.get_input_by_name('image').value.source_node_id == '1'
+    assert image_rotate_node.get_input_by_name('image').value.source_node_output_name == 'IMAGE'
+
+    preview_image = workflow.get_node_by_id('3')
+    assert preview_image
+    assert preview_image.id == '3'
+    assert preview_image.get_input_by_name('images')
+    assert preview_image.get_input_by_name('images').name == 'images'
+    assert preview_image.get_input_by_name('images').is_link == True
+    assert preview_image.get_input_by_name('images').value.source_node_id == '4:2'
+    assert preview_image.get_input_by_name('images').value.source_node_output_name == 'IMAGE'
+
+    api_dict = workflow.as_api_dict()
+    assert api_dict
+    assert api_dict['3']['inputs']['images'][0] == '4:2'
+    assert api_dict['3']['inputs']['images'][1] == 0

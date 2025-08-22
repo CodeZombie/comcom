@@ -5,6 +5,7 @@ from .link_input import Comfy_V0_4_LinkInput
 from .output import Comfy_V0_4_Output
 
 from comcom.comfy_ui.models.normalized.workflow.node import NormalizedNode
+from comcom.comfy_ui.models.normalized.node_definition.node_definition import NormalizedNodeDefinition
 
 class Comfy_V0_4_Node(BaseModel):
     model_config = ConfigDict(coerce_numbers_to_str=True)
@@ -19,14 +20,15 @@ class Comfy_V0_4_Node(BaseModel):
     def muted(self) -> bool:
         return self.mode == 4
     
-    def to_normalized(self) -> NormalizedNode:
+    def to_normalized(self, node_definitions: List[NormalizedNodeDefinition]) -> NormalizedNode:
         return NormalizedNode(
             id=self.id,
             type=self.type,
             mode=self.mode,
             link_inputs=[link_input.to_normalized() for link_input in self.link_inputs],
             outputs=[output.to_normalized() for output in self.outputs],
-            widgets_values=self.widgets_values
+            widgets_values=self.widgets_values,
+            node_definitions=node_definitions
         )
 
     def get_link_input(self, input_name: str) -> Comfy_V0_4_LinkInput | None:

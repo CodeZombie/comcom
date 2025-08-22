@@ -1,0 +1,2 @@
+class WorkflowParseError(Exception):
+    pass

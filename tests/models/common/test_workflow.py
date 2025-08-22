@@ -3,6 +3,7 @@ import pytest
 from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import Comfy_V0_4_Workflow
 from comcom.comfy_ui.models.normalized.workflow.workflow import NormalizedWorkflow
 from comcom.comfy_ui.models.normalized.workflow.subgraph_definition import NormalizedSubgraphDefinition
+from comcom.comfy_ui.models.raw.node_definitions.version_1_0.node_definitions import Comfy_v1_0_NodeDefinitions
 
 TWO_NODES_WORKFLOW_JSON = """
 {
@@ -161,22 +162,43 @@ TWO_NODES_WORKFLOW_JSON = """
 
 @pytest.fixture
 def workflow():
-    return Comfy_V0_4_Workflow.model_validate_json(TWO_NODES_WORKFLOW_JSON)
+    normalized_node_definitions = Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
+    return Comfy_V0_4_Workflow.model_validate_json(TWO_NODES_WORKFLOW_JSON).to_normalized(normalized_node_definitions).to_common(normalized_node_definitions)
 
 def test_workflow_properties(workflow):
     assert workflow.id == "bb53cfff-fb44-4427-a715-5a58e1dcfb18"
-    assert workflow.revision == 0
-    assert len(workflow.get_node('3').link_inputs) == 1
-    assert len(workflow.get_node('3').outputs) == 3
-
-def test_nodes(workflow):
     assert len(workflow.nodes) == 2
+    get_image_size_node = workflow.get_node_by_id('3')
+    assert get_image_size_node
+    assert get_image_size_node.id == '3'
+    assert get_image_size_node.get_input_by_name('image')
+    assert get_image_size_node.get_input_by_name('image').name == 'image'
+    assert get_image_size_node.get_input_by_name('image').is_link == True
+    assert get_image_size_node.get_input_by_name('image').value.source_node_id == None
+    assert get_image_size_node.get_input_by_name('image').value.source_node_output_name == None
 
-# def test_convert_version_0_4_workflow_to_normalized(workflow):
-#     normalized_workflow = workflow.to_normalized()
-#     assert isinstance(normalized_workflow, NormalizedWorkflow)
-#     assert normalized_workflow.id == workflow.id
-#     assert normalized_workflow.revision == workflow.revision
-#     assert normalized_workflow.version == workflow.version
-#     assert len(normalized_workflow.subgraph_definitions) == len(workflow.subgraph_definitions)
-#     assert len(normalized_workflow.nodes) == 2
+    empty_image_node = workflow.get_node_by_id('4')
+    assert empty_image_node
+    assert empty_image_node.id == '4'
+    assert empty_image_node.get_input_by_name('width')
+    assert empty_image_node.get_input_by_name('width').name == 'width'
+    assert empty_image_node.get_input_by_name('width').is_link == True
+    assert empty_image_node.get_input_by_name('width').value.source_node_id == '3'
+    assert empty_image_node.get_input_by_name('width').value.source_node_output_name == 'width'
+
+    assert empty_image_node.get_input_by_name('height')
+    assert empty_image_node.get_input_by_name('height').name == 'height'
+    assert empty_image_node.get_input_by_name('height').is_link == True
+    assert empty_image_node.get_input_by_name('height').value.source_node_id == '3'
+    assert empty_image_node.get_input_by_name('height').value.source_node_output_name == 'height'
+
+    assert empty_image_node.get_input_by_name('batch_size')
+    assert empty_image_node.get_input_by_name('batch_size').name == 'batch_size'
+    assert empty_image_node.get_input_by_name('batch_size').is_link == True
+    assert empty_image_node.get_input_by_name('batch_size').value.source_node_id == '3'
+    assert empty_image_node.get_input_by_name('batch_size').value.source_node_output_name == 'batch_size'
+
+    assert empty_image_node.get_input_by_name('color')
+    assert empty_image_node.get_input_by_name('color').name == 'color'
+    assert empty_image_node.get_input_by_name('color').is_link == False
+    assert empty_image_node.get_input_by_name('color').value == 0

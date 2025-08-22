@@ -190,7 +190,7 @@ TWO_NODES_WORKFLOW_JSON = """
         "Node name for S&R": "CheckpointLoaderSimple"
       },
       "widgets_values": [
-        "model.safetensors"
+        "diffusion_model.safetensors"
       ]
     },
     {
