@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 @dataclass
 class NormalizedLinkInput:
     name: str

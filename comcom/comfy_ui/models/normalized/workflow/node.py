@@ -14,7 +14,6 @@ from .input import NormalizedInput
 from .link_input import NormalizedLinkInput
 from .output import NormalizedOutput
 
-@dataclass
 class NormalizedNode:
     id: str
     type: str

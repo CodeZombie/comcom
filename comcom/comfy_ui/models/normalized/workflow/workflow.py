@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List
+import copy
 
 from .node import NormalizedNode
 from .subgraph_definition import NormalizedSubgraphDefinition
@@ -34,12 +35,12 @@ class NormalizedWorkflow:
             return True
         
         # Filter out invalid nodes
-        regular_nodes: List[NormalizedNode] = [node for node in self.nodes if is_node_valid(node)]
-        reroute_nodes = [node for node in self.nodes if node.type == 'Reroute']
-        muted_nodes = [node for node in self.nodes if node.muted]
+        regular_nodes: List[NormalizedNode] = [copy.deepcopy(node) for node in self.nodes if is_node_valid(node)]
+        reroute_nodes = [copy.deepcopy(node) for node in self.nodes if node.type == 'Reroute']
+        muted_nodes = [copy.deepcopy(node) for node in self.nodes if node.muted]
 
         # Find all subgraph instances
-        subgraph_instance_nodes = [node for node in self.nodes if node.type in [subgraph_definition.id for subgraph_definition in self.subgraph_definitions]]
+        subgraph_instance_nodes = [copy.deepcopy(node) for node in self.nodes if node.type in [subgraph_definition.id for subgraph_definition in self.subgraph_definitions]]
 
         for subgraph_instance_node in subgraph_instance_nodes:
             subgraph_definition = self.get_subgraph_definition_by_id(subgraph_instance_node.type)

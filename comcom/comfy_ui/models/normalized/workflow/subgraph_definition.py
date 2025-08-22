@@ -21,11 +21,11 @@ class NormalizedSubgraphDefinition:
     outgoing: List[NormalizedLinkInput]
     subgraph_definitions: List[Self]
 
-    def get_incoming(self, name: str) -> NormalizedOutput:
-        return next((incoming for incoming in self.incoming if incoming.name == name), None)
+    # def get_incoming(self, name: str) -> NormalizedOutput:
+    #     return next((incoming for incoming in self.incoming if incoming.name == name), None)
 
-    def get_outgoing(self, name: str) -> NormalizedLinkInput:
-        return next((outgoing for outgoing in self.outgoing if outgoing.name == name), None)
+    # def get_outgoing(self, name: str) -> NormalizedLinkInput:
+    #     return next((outgoing for outgoing in self.outgoing if outgoing.name == name), None)
     
     def to_node_definition(self) -> NormalizedNodeDefinition:
         return NormalizedNodeDefinition(
@@ -72,7 +72,6 @@ class NormalizedSubgraphDefinition:
                         ))
         return bypasses
 
-    # <link_id>:<real external ultimate source link id>
     def as_normalized_node_list(self, subgraph_instance: NormalizedNode, node_definitions: List[NormalizedNodeDefinition], subgraph_definitions: List[Self], prefix: str = "") -> List[NormalizedNode]:
             prefix = "{}:{}".format(prefix, subgraph_instance.id) if prefix else subgraph_instance.id
             subgraph_definitions_as_node_definitions = [subgraph_definition.to_node_definition() for subgraph_definition in self.subgraph_definitions]
