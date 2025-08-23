@@ -10,6 +10,7 @@ from comcom.comfy_ui.models.normalized.node_definition.node_definition import No
 class Comfy_V0_4_Node(BaseModel):
     model_config = ConfigDict(coerce_numbers_to_str=True)
     id: str
+    title: Optional[str | None] = None
     type: str
     mode: int
     link_inputs: list[Comfy_V0_4_LinkInput] = Field(validation_alias=AliasPath('inputs'), default=[])
@@ -23,6 +24,7 @@ class Comfy_V0_4_Node(BaseModel):
     def to_normalized(self, node_definitions: List[NormalizedNodeDefinition]) -> NormalizedNode:
         return NormalizedNode(
             id=self.id,
+            title=self.title,
             type=self.type,
             mode=self.mode,
             link_inputs=[link_input.to_normalized() for link_input in self.link_inputs],

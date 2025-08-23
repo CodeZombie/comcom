@@ -1,0 +1,111 @@
+from typing import Dict, Tuple, List
+import copy
+import re
+import itertools
+
+from .exceptions import LoopDetectedException, InvalidKeyException, MaximumResolutionDepthException
+from .dot_dict import DotDict
+
+
+class TemplateDictSolver:
+    placeholder_pattern = re.compile(r'\{([^}]+)\}|^\$(.+)') # Matches '{val}' or '$val'
+    max_iterations: int = 16
+
+    @classmethod
+    def get_unresolved_placeholder_map(cls, data: Dict) -> Tuple[Dict[str, List[str]], int]:
+        """
+            Returns a flattened dictionary containing a list of all the unresolved replacements within the dict's string values.
+            It also returns a hash representing the values and keys of the dict.
+
+            For example:
+
+            get_unresolved_placeholder_map(
+                data={
+                    'a': "Hello {subject}",
+                    'b': {
+                        'c': "Goodbye, {name}"
+                    },
+                    'd': "$a"
+                })
+            
+            will return:
+            (
+                {
+                    'a': ['subject],
+                    'b.c': ['name'],
+                    'd': ['a']
+                },
+                938402384994
+            )
+        """
+        unresolved_placeholders = {}
+        for key in data.keys():
+            unresolved_placeholders[key] = []
+            if isinstance(data[key], str):
+                unresolved_placeholders[key] = list(itertools.chain(*TemplateDictSolver.placeholder_pattern.findall(data[key])))
+            if isinstance(data[key], Dict):
+                sub_unresolved_placeholder_map, _ = TemplateDictSolver.get_unresolved_placeholder_map(data[key])
+                for subdotdict_key in sub_unresolved_placeholder_map.keys():
+                    unresolved_placeholders["{}.{}".format(key, subdotdict_key)] = sub_unresolved_placeholder_map[subdotdict_key] 
+        s = ""
+        for key in unresolved_placeholders.keys():
+            s += "{}::{}".format(key, ''.join(k for k in unresolved_placeholders[key]))
+        return unresolved_placeholders, hash(s)
+    
+    @classmethod
+    def get_non_empty_keys_from_dict_of_lists(cls, dict_of_lists) -> List[str]:
+        """
+        Given a dictionary containing lists of strings, this will flatten the dictionary, discarding any empty strings
+        and return the values as a list.
+        """
+        non_empty_keys: List[str] = []
+        for key in dict_of_lists.keys():
+            if dict_of_lists[key]:
+                non_empty_keys.append(key)
+        return non_empty_keys
+        
+    @classmethod
+    def solve(cls, data: Dict, extra_data_source: Dict = {}) -> Dict:
+        history: Dict[int, Dict] = {}
+        iteration_count: int = 0
+
+        solved_dict: Dict = copy.deepcopy(data)
+        step_history, step_hash = TemplateDictSolver.get_unresolved_placeholder_map(solved_dict)
+        history[step_hash] = step_history
+
+        while iteration_count < TemplateDictSolver.max_iterations:
+            iteration_count += 1
+            TemplateDictSolver._in_place_solve_step(solved_dict, extra_data_source | solved_dict)
+            step_history, step_hash = TemplateDictSolver.get_unresolved_placeholder_map(solved_dict)
+            unresolved_keys = TemplateDictSolver.get_non_empty_keys_from_dict_of_lists(step_history)
+            if not unresolved_keys:
+                return solved_dict
+            if step_hash in history.keys():
+                raise LoopDetectedException("Loop detected between the following keys: {}".format(unresolved_keys))
+            history[step_hash] = step_history
+
+        # This should never really be reached. 
+        # The loop detection system SHOULD catch all loops before they get to this point, but I'm going to leave this here 
+        # just in case because if the above code doesn't catch a loop it _will_ result in a complete system crash.
+        raise MaximumResolutionDepthException("Maximum resolution depth reached: {}".format(TemplateDictSolver.max_iterations))
+    
+    # extra_data_source should have {'^': parent.data}
+
+    @classmethod
+    def _in_place_solve_step(cls, data: Dict, data_source: Dict):
+        dot_dict_data_source: DotDict = DotDict(data_source)
+
+        for key in data.keys():
+            if isinstance(data[key], str):
+                try:
+                    if data[key].startswith('$'):
+                        data[key] = data_source[data[key][1:]]
+                    else:
+                        data[key] = data[key].format(**dot_dict_data_source)
+                except KeyError as e:
+                    raise InvalidKeyException(entry_key=key, invalid_key=str(e), template_string=data[key])
+            if isinstance(data[key], dict):
+                try:
+                    TemplateDictSolver._in_place_solve_step(data[key], data_source) #data[key].__interior_solve_interpolations(data_source) #  | {'^': self}
+                except InvalidKeyException as e:
+                    raise InvalidKeyException(entry_key="{}.{}".format(key, e.entry_key), invalid_key=e.invalid_key, template_string=e.template_string)

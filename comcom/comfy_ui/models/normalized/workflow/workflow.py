@@ -67,6 +67,7 @@ class NormalizedWorkflow:
         for node_to_resolve in regular_nodes:
             resolved_nodes.append(Node(
                 id=node_to_resolve.id,
+                title=node_to_resolve.title,
                 type=node_to_resolve.type,
                 inputs=[input.to_common(regular_nodes) for input in node_to_resolve.inputs],
                 outputs=[Output(i, node_to_resolve.outputs[i].name) for i in range(len(node_to_resolve.outputs))]

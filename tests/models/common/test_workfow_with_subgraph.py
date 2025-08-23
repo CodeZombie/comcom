@@ -285,7 +285,6 @@ def test_workflow_properties(workflow):
     assert image_rotate_node.get_input_by_name('image')
     assert image_rotate_node.get_input_by_name('image').name == 'image'
     assert image_rotate_node.get_input_by_name('image').is_link == True
-    print(image_rotate_node.get_input_by_name('image'))
     assert image_rotate_node.get_input_by_name('image').value.source_node_id == '1'
     assert image_rotate_node.get_input_by_name('image').value.source_node_output_name == 'IMAGE'
 

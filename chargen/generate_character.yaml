@@ -1,0 +1,50 @@
+# Value Groups
+model_values: &model_values
+  load_checkpoint.ckpt_name: "model.safetensors"
+
+upscale_model_values: &upscale_model_values
+  Load Upscale Model.model_name: "ESRGAN_4x.pth"
+
+# Common workflows
+upscale_workflow: &upscale_workflow
+  path: "upscaler.json"
+  values:
+    upscale_amount: 0.5
+  input:
+    <<: *upscale_model_values
+    Load Image.image: $..output.save_image_a.filename
+    Upscale Image By.scale_by: $upscale_amount
+  output:
+    save_image:
+      node: "Save Image"
+      filepath: "{^.output.save_image.filepath}.upscaled.png" # ^ is a special identifier that means "up". in the dict, it refers to the parent.
+
+globals:
+  style: 
+    positive: "masterpiece, best quality, beautiful"
+    negative: "ugly, gross, bad, worst quality"
+  species: "puppy"
+
+workflows:
+  generate_base_image:
+    path: "chargen_worflow.json"
+    values:
+      id: "base_image"
+      pose: "sitting on a bench"
+      width: 512
+      height: 1024
+    input:
+      <<: *model_values
+      # $7.text: "..." # We can refer to nodes by their ID to avoid ambiguity, if we want.
+      positive_prompt.text: "{style.positive}, a cute {species}, {pose}, beautiful scenery, detailed"
+      negative_prompt.text: "{style.negative}"
+      empty_image.width: $width
+      empty_image.height: $height
+    output:
+      save_image:
+        node: "save_image"
+        filename: "{species}_{id}.png" # <output node>.<output index> : <filename>
+
+    workflows:
+      upscale:
+        <<: *upscale_workflow

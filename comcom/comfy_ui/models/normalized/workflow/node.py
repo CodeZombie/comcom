@@ -1,5 +1,4 @@
 from typing import List, Dict
-from dataclasses import dataclass
 
 from comcom.comfy_ui.exceptions import WorkflowParseError
 
@@ -16,6 +15,7 @@ from .output import NormalizedOutput
 
 class NormalizedNode:
     id: str
+    title: str
     type: str
     mode: int
     inputs: List[NormalizedInput]
@@ -24,6 +24,7 @@ class NormalizedNode:
     def __init__(
             self, 
             id: str, 
+            title: str,
             type: str, 
             mode: int, 
             link_inputs: List[NormalizedLinkInput], 
@@ -32,6 +33,7 @@ class NormalizedNode:
             node_definitions: List[NormalizedNodeDefinition]):
         
         self.id = id
+        self.title = title
         self.type = type
         self.mode = mode
         self.outputs = outputs
@@ -109,7 +111,6 @@ class NormalizedNode:
                 except Found:
                     break
         return bypasses
-    
 
     def apply_bypasses(self, bypasses: List[Bypass]):
         for bypass in bypasses:

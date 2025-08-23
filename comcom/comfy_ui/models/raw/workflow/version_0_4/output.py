@@ -24,3 +24,5 @@ class Comfy_V0_4_Output(BaseModel):
             type=self.type,
             links=self.links,
         )
+
+    

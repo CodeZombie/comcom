@@ -673,8 +673,6 @@ def workflow():
 
 def test_workflow_properties(workflow):
     assert workflow.id == "02439884-a1c5-449e-bf43-6e05377a45ca"
-    for node in workflow.nodes:
-        print(node)
     assert len(workflow.nodes) == 6
 
     image_rotate_node = workflow.get_node_by_id("4:2")

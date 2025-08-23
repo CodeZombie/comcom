@@ -6,6 +6,7 @@ from .output import Output
 @dataclass
 class Node:
     id: str
+    title: str
     type: str
     inputs: List[Input]
     outputs: List[Output]
