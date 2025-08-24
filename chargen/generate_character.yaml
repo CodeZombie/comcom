@@ -12,17 +12,22 @@ upscale_workflow: &upscale_workflow
     upscale_amount: 0.5
   input:
     <<: *upscale_model_values
-    Load Image.image: $..output.save_image_a.filename
+    Load Image.image: "{^.output.save_image.filename}"
     Upscale Image By.scale_by: $upscale_amount
+    test: $^.resolution.width
   output:
     save_image:
       node: "Save Image"
-      filepath: "{^.output.save_image.filepath}.upscaled.png" # ^ is a special identifier that means "up". in the dict, it refers to the parent.
+      filename: "{^.output.save_image.filename}.upscaled"
 
 globals:
   style: 
     positive: "masterpiece, best quality, beautiful"
     negative: "ugly, gross, bad, worst quality"
+  image_description:
+    positive: "A cute {{red|blue|purple}} {species} {pose}"
+    negative: ""
+  pose: "sitting on a bench"
   species: "puppy"
 
 workflows:
@@ -30,20 +35,23 @@ workflows:
     path: "chargen_worflow.json"
     values:
       id: "base_image"
-      pose: "sitting on a bench"
-      width: 512
-      height: 1024
+      additional_prompt:
+        positive: "eyes open, {{red|blue}} eyes"
+      resolution:
+        width: 512
+        height: 1024
     input:
       <<: *model_values
       # $7.text: "..." # We can refer to nodes by their ID to avoid ambiguity, if we want.
-      positive_prompt.text: "{style.positive}, a cute {species}, {pose}, beautiful scenery, detailed"
+      positive_prompt.text: "{style.positive}, {image_description.positive}"
       negative_prompt.text: "{style.negative}"
-      empty_image.width: $width
-      empty_image.height: $height
+      empty_image: # We can refer to Nodes as dicts and assign their properties as key:val pairs.
+        width: $resolution.width # "$varname" syntax will copy the value directly, without converting to a string. Good for numbers.
+        height: $resolution.height
     output:
       save_image:
         node: "save_image"
-        filename: "{species}_{id}.png" # <output node>.<output index> : <filename>
+        filename: "/base_image/{species}_{id}"
 
     workflows:
       upscale:

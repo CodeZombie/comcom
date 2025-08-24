@@ -7,9 +7,20 @@ from .exceptions import LoopDetectedException, InvalidKeyException, MaximumResol
 from .dot_dict import DotDict
 
 
+def nested_replace(dictionary: Dict, substring: str, replace_with: str) -> Dict:
+    for key in dictionary.keys():
+        if isinstance(dictionary[key], str):
+            dictionary[key] = dictionary[key].replace(substring, replace_with)
+        elif isinstance(dictionary[key], Dict):
+            dictionary[key] = nested_replace(dictionary[key], substring, replace_with)
+    return dictionary
+
 class TemplateDictSolver:
-    placeholder_pattern = re.compile(r'\{([^}]+)\}|^\$(.+)') # Matches '{val}' or '$val'
+    placeholder_pattern = re.compile(r'\{([^}]+)\}[^}]|^\$(.+)') # Matches '{val}' or '$val'
+    # \{([^}]+)\}[^}]|^\$(.+)
     max_iterations: int = 16
+    ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN = "_!*COMCOM_OPEN_ESCAPE_CURLY_BRACKET*!_"
+    ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED = "_!*COMCOM_CLOSED_ESCAPE_CURLY_BRACKET*!_"
 
     @classmethod
     def get_unresolved_placeholder_map(cls, data: Dict) -> Tuple[Dict[str, List[str]], int]:
@@ -87,7 +98,7 @@ class TemplateDictSolver:
         # This should never really be reached. 
         # The loop detection system SHOULD catch all loops before they get to this point, but I'm going to leave this here 
         # just in case because if the above code doesn't catch a loop it _will_ result in a complete system crash.
-        raise MaximumResolutionDepthException("Maximum resolution depth reached: {}".format(TemplateDictSolver.max_iterations))
+        raise MaximumResolutionDepthException("Maximum resolution depth {} reached without solving for the following keys: {}".format(TemplateDictSolver.max_iterations, unresolved_keys))
     
     # extra_data_source should have {'^': parent.data}
 
@@ -99,13 +110,33 @@ class TemplateDictSolver:
             if isinstance(data[key], str):
                 try:
                     if data[key].startswith('$'):
-                        data[key] = data_source[data[key][1:]]
+                        key_path = data[key][1:].split('.')
+                        value = dot_dict_data_source
+                        for v in key_path:
+                            if v not in value.keys():
+                                raise KeyError(data[key][1:])
+                            value = value.get(v, None)
+                        data[key] = value
                     else:
-                        data[key] = data[key].format(**dot_dict_data_source)
-                except KeyError as e:
-                    raise InvalidKeyException(entry_key=key, invalid_key=str(e), template_string=data[key])
+                        
+                        data[key] = data[key] \
+                        .replace("{{", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN) \
+                        .replace("}}", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED) \
+                        .format(**dot_dict_data_source) \
+                        .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN, "{{",) \
+                        .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED, "}}")
+                except (KeyError, AttributeError) as e:
+                    raise InvalidKeyException(
+                        entry_key=key, 
+                        invalid_key=str(e), 
+                        template_string=data[key], 
+                        available_keys=dot_dict_data_source.get_flattened_keys())
             if isinstance(data[key], dict):
                 try:
                     TemplateDictSolver._in_place_solve_step(data[key], data_source) #data[key].__interior_solve_interpolations(data_source) #  | {'^': self}
                 except InvalidKeyException as e:
-                    raise InvalidKeyException(entry_key="{}.{}".format(key, e.entry_key), invalid_key=e.invalid_key, template_string=e.template_string)
+                    raise InvalidKeyException(
+                        entry_key="{}.{}".format(key, e.entry_key), 
+                        invalid_key=e.invalid_key, 
+                        template_string=e.template_string,
+                        available_keys=e.available_keys)

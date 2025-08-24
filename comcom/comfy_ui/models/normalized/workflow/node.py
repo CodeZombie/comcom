@@ -51,6 +51,10 @@ class NormalizedNode:
         node_definition: NormalizedNodeDefinition = next((node_definition for node_definition in node_definitions if node_definition.name == type), None)
         if not node_definition:
             raise WorkflowParseError("Node Definition {} does not exist.".format(self.type))
+        
+        # Set the title from the node definition if the node instance didn't have one.
+        if self.title == None:
+            self.title = node_definition.display_name
 
         input_names = [input_slot.name for input_slot in node_definition.input_slot_definitions]
 
