@@ -313,10 +313,16 @@ import json
 
 from comcom.playbook.playbook import Playbook
 import yaml
+from comcom.comfy_ui.models.raw.node_definitions.version_1_0.node_definitions import Comfy_v1_0_NodeDefinitions
+
+normalized_node_definitions = Comfy_v1_0_NodeDefinitions.model_validate_json(open('tests/data/object_info.json').read()).to_normalized()
 
 playbook_dict = yaml.load(open('chargen/generate_character.yaml'), Loader=yaml.FullLoader)
 playbook = Playbook.from_dict(playbook_dict)
-playbook.print('generate_base_image')
+workflow = playbook.get_workflow_by_path_str('generate_base_image')
+workflow.execute(normalized_node_definitions)
+
+#playbook.print('generate_base_image')
 
 
 

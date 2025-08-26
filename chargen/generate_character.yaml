@@ -7,32 +7,34 @@ upscale_model_values: &upscale_model_values
 
 # Common workflows
 upscale_workflow: &upscale_workflow
-  path: "upscaler.json"
+  path: "upscale.json"
   values:
     upscale_amount: 0.5
+  load:
+    Load Mask.mask: extras/mask.png
+    Load Image.image: "{^.output.save_image}"
   input:
     <<: *upscale_model_values
-    Load Image.image: "{^.output.save_image.filename}"
+    Another Load Image.image: extras/mask.png
+    Load Image.image: "{^.output.save_image}"
     Upscale Image By.scale_by: $upscale_amount
-    test: $^.resolution.width
+    $5.upscale_method: "bilinear" # We can refer to nodes by their ID to avoid ambiguity, if we want.
   output:
-    save_image:
-      node: "Save Image"
-      filename: "{^.output.save_image.filename}.upscaled"
+    Save Image: "{^.output.save_image}.upscaled"
 
 globals:
   style: 
     positive: "masterpiece, best quality, beautiful"
     negative: "ugly, gross, bad, worst quality"
   image_description:
-    positive: "A cute {{red|blue|purple}} {species} {pose}"
+    positive: "A cute {{red|blue|purple}} {species}, {pose}, white background"
     negative: ""
-  pose: "sitting on a bench"
-  species: "puppy"
+  pose: "standing up, arms out"
+  species: "tiny little alien dude"
 
 workflows:
   generate_base_image:
-    path: "chargen_worflow.json"
+    path: "chargen_workflow_double.json"
     values:
       id: "base_image"
       additional_prompt:
@@ -42,17 +44,19 @@ workflows:
         height: 1024
     input:
       <<: *model_values
-      # $7.text: "..." # We can refer to nodes by their ID to avoid ambiguity, if we want.
       positive_prompt.text: "{style.positive}, {image_description.positive}"
       negative_prompt.text: "{style.negative}"
       empty_image: # We can refer to Nodes as dicts and assign their properties as key:val pairs.
         width: $resolution.width # "$varname" syntax will copy the value directly, without converting to a string. Good for numbers.
         height: $resolution.height
     output:
-      save_image:
-        node: "save_image"
-        filename: "/base_image/{species}_{id}"
+      save_image: "/base_image/{species}_{id}"
 
     workflows:
       upscale:
         <<: *upscale_workflow
+
+# Let's think about using a `?node_name` to allow reverse-searches for nodes.
+# As in, if you have a deeply nested workflow, and an entry like 'character_name: ?generate_base_image.character_name', then we will just search up through parents until we hit a workflow called
+# 'generate_base_image', and then return the `character_name` value from there.
+# With this, we can nest workflows however deeply we want without having to worry about directory structure.

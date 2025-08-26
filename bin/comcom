@@ -1,0 +1,27 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(__file__, '..', '..')))
+import argparse
+from comcom.cli.comcom_cli import ComComCLI, ComComCLIException
+from comcom.comcom import ComCom
+from rich.console import Console
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--interactive', '-i', action="store_true", default=False, required=False)
+
+    args, _ = parser.parse_known_args()
+
+    if args.interactive:
+        print("This would start comcom in interactive mode if that was implemented.")
+        return
+    comcom = ComCom()
+    try:
+        ComComCLI(comcom)
+    except ComComCLIException as e:
+        Console().print(str(e))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
