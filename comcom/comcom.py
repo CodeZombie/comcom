@@ -3,6 +3,8 @@ from typing import List, Dict, Callable
 from comcom.comfy_ui.server.server import ComfyServer
 from comcom.playbook.workflow_instance import WorkflowInstance
 
+from comcom.comfy_ui.file_management.image import save_remote_image_locally
+
 class ComCom:
     def __init__(self):
         self._root_path: str | None = os.getcwd()
@@ -47,7 +49,12 @@ class ComCom:
         return True
     
     def submit_workflow(self, workflow: WorkflowInstance, on_progress_callable: Callable) -> Dict:
-        return self.comfy_server.submit_workflow_instance(workflow, on_progress_callable)
+        local_path_to_remote_file_map = self.comfy_server.submit_workflow_instance(workflow, on_progress_callable)
+        print("local_path_to_remote_file_map")
+        print(local_path_to_remote_file_map)
+        for local_path, remote_file in local_path_to_remote_file_map.items():
+            print("Saving \"{}\" to \"{}\"".format(remote_file.full_filepath, local_path))
+            save_remote_image_locally(remote_file.full_filepath, remote_file.filename + " [output]", local_path, 'png')
 
     def execute_worlflow_by_path(self, workflow_path: str | List[str], on_progress_callable: Callable) -> Dict:
         return self.submit_workflow(self.get_workflow_by_path(workflow_path), on_progress_callable)

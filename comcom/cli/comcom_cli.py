@@ -122,13 +122,11 @@ class ComComCLI:
         workflow = playbook.get_workflow_by_path(workflow_name)
         try:
             with Live(self.progress):
-                image_outputs = comcom.comfy_server.submit_workflow_instance(workflow, self.on_node_progress)
+                comcom.submit_workflow(workflow, self.on_node_progress)
             
         except ComfyConnectionError as e:
             raise ComComCLIException("[red][bold]ERROR: [/]{}[/]".format(str(e)))
         
-        print(image_outputs)
-
     def on_node_progress(self, node_id, value, max):
         if node_id not in self.progress_task_ids.keys():
             self.progress_task_ids[node_id] = self.progress.add_task("Processing node [bold]#{}[/]".format(node_id), total=max)

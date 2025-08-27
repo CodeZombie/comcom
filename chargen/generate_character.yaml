@@ -11,12 +11,9 @@ upscale_workflow: &upscale_workflow
   values:
     upscale_amount: 0.5
   load:
-    Load Mask.mask: extras/mask.png
-    Load Image.image: "{^.output.save_image}"
+    Load Image (from Outputs).image: "{^.output.save_image}"
   input:
     <<: *upscale_model_values
-    Another Load Image.image: extras/mask.png
-    Load Image.image: "{^.output.save_image}"
     Upscale Image By.scale_by: $upscale_amount
     $5.upscale_method: "bilinear" # We can refer to nodes by their ID to avoid ambiguity, if we want.
   output:
@@ -50,8 +47,7 @@ workflows:
         width: $resolution.width # "$varname" syntax will copy the value directly, without converting to a string. Good for numbers.
         height: $resolution.height
     output:
-      save_image: "/base_image/{species}_{id}"
-
+      save_image: "base_image/{species}_{id}"
     workflows:
       upscale:
         <<: *upscale_workflow

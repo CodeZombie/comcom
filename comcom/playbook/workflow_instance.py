@@ -18,6 +18,8 @@ from comcom.comfy_ui.models.common.workflow import Workflow
 
 from comcom.comfy_ui.server.server import ComfyServer
 
+from comcom.comfy_ui.file_management.image import get_remote_filename
+
 # @dataclass
 # class OutputMap:
 #     node: str
@@ -34,6 +36,7 @@ class WorkflowInstance:
     id: str
     path: str
     values: Dict[str, str | int | float]
+    load: Dict[str, str | int | float]
     input: Dict[str, str | int | float]
     output: Dict[str, str]
     workflows: Dict[str, Self]
@@ -44,31 +47,37 @@ class WorkflowInstance:
     def from_dict(cls, id: str, workflow_map_dict: Dict, parent_values: Dict, global_values: Dict) -> Self:
         id: str = id
         path: str = workflow_map_dict.get('path', None)
+        solved_load: Dict = TemplateDictSolver.solve(workflow_map_dict.get('load', {}), global_values | {'^': parent_values})
         solved_values: Dict = TemplateDictSolver.solve(workflow_map_dict.get('values', {}), global_values | {'^': parent_values})
         solved_input: Dict = TemplateDictSolver.solve(workflow_map_dict.get('input', {}), global_values | solved_values | {'^': parent_values})
         solved_raw_output: Dict = TemplateDictSolver.solve(workflow_map_dict.get('output', {}), global_values | solved_values | {'^': parent_values})
         solved_outputs: Dict = {}
-
         for key in solved_raw_output.keys():
             solved_outputs[key] = solved_raw_output[key]
 
         workflows: Dict[str, Self] = {}
         for child_workflow_key, child_workflow_dict in workflow_map_dict.get('workflows', {}).items():
-            workflows[child_workflow_key] = cls.from_dict(child_workflow_key, child_workflow_dict, solved_values | {'^': parent_values } | {'input': solved_input} | {'output': solved_outputs}, global_values)
-        
+            workflows[child_workflow_key] = cls.from_dict(child_workflow_key, child_workflow_dict, solved_values | {'^': parent_values } | {'input': solved_input} | {'output': solved_outputs} | {'load': solved_load}, global_values)
+
         return cls(
             id=id,
             path=path,
             values=solved_values,
+            load=solved_load,
             input=solved_input,
             output=solved_outputs,
             workflows=workflows
         )
     
-    def to_api_dict(self, node_definitions: List[NormalizedNodeDefinition]) -> Dict:
+    def to_api_dict(self, node_definitions: List[NormalizedNodeDefinition], comfy_server: ComfyServer) -> Dict:
+        # Loop through self.load and replace all the values with remote filenames
+        for key, value in self.load.items():
+            self.load[key] = get_remote_filename(self.load[key], 'png', comfy_server)
+
         comfy_workflow = Comfy_V0_4_Workflow.model_validate_json(open(os.path.join('workflows', self.path)).read()).to_normalized(node_definitions).to_common(node_definitions)
-        
-        for key, value in flatten_dict(self.input).items():
+
+        all_solved_values = flatten_dict(self.input) | flatten_dict(self.load)
+        for key, value in all_solved_values.items():
             input_path = key.rsplit('.', 1)
             if len(input_path) != 2:
                 raise Exception("Workflow \"{workflow_id}\"'s input \"{input_path}\" is invalid. Must be formatted like \"<node>.<input_name>\", not whatever that is.".format(workflow_id=self.id, input_path=key))
@@ -100,8 +109,16 @@ class WorkflowInstance:
                         available_inputs=[input.name for input in node.inputs if not input.is_link]
                         ))
                 input.value = value
-        return comfy_workflow.as_api_dict()
-    
+
+        output_node_id_to_local_path_map = {}
+        for key, local_path in self.output.items():
+            if key.startswith('$'):
+                output_node_id_to_local_path_map[key[:1]] = local_path
+            else:
+                for node in comfy_workflow.get_nodes_by_title(key):
+                    output_node_id_to_local_path_map[node.id] = local_path
+
+        return (comfy_workflow.as_api_dict(), output_node_id_to_local_path_map)
 
     # comfy_server = ComfyServer('127.0.0.1', 8188)
     # def execute(self, comfy_server: ComfyServer, on_node_progress: Callable) -> Dict[str, str]:

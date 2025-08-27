@@ -12,6 +12,9 @@ from comcom.comfy_ui.models.normalized.node_definition.node_definition import No
 
 from comcom.comfy_ui.server.exceptions import ComfyConnectionError
 
+from comcom.comfy_ui.file_management.remote_file import RemoteFile
+
+
 class ComfyServer:
     def __init__(self, host, port):
         self.host: str = host
@@ -31,11 +34,20 @@ class ComfyServer:
         
         return json.loads(response.read().decode('utf-8'))
     
+    def upload_image(image_data) -> str:
+        try:
+            data = {"subfolder": "hamburger"}
+            files = {'image': ('cheeseburger', image_data)}
+            response = urllib.request.urlopen(f"http://{self._url_without_protocol}/upload/image", files=files, data=data)
+            return response.content
+        except urllib.error.URLError as e:
+            raise ComfyConnectionError("Failed to upload image: {}".format(str(e)))
+
     def submit_workflow_instance(self, workflow: Workflow, on_node_progress: Callable) -> Dict[str, str]:
         node_definitions = Comfy_v1_0_NodeDefinitions.model_validate(self.get_node_definitions_dict()).to_normalized()
-
+        api_dict, output_node_id_to_local_path_map = workflow.to_api_dict(node_definitions, self)
         prompt_dict = {
-            'prompt': workflow.to_api_dict(node_definitions),
+            'prompt': api_dict,
             'client_id': self.client_id
         }
         prompt_json = json.dumps(prompt_dict).encode('utf-8')
@@ -111,6 +123,15 @@ class ComfyServer:
             if 'images' in node_output:
                 for image in node_output['images']:
                     image_url_data = urllib.parse.urlencode({"filename": image['filename'], "subfolder": image['subfolder'], "type": image['type']})
-                    node_outputs[node_id] = f"http://{self._url_without_protocol}/view?{image_url_data}"
+                    node_outputs[node_id] = RemoteFile(
+                        filename=image['filename'],
+                        full_filepath=f"http://{self._url_without_protocol}/view?{image_url_data}",
+                        subfolder=image['subfolder']
+                    )                    
 
-        return node_outputs        
+        # Save the images...
+        remote_path_to_local_path_map = {}
+        for node_id, remote_file in node_outputs.items():
+            remote_path_to_local_path_map[output_node_id_to_local_path_map.get(node_id)] = remote_file
+
+        return remote_path_to_local_path_map
