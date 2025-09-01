@@ -99,7 +99,7 @@ class Recipe(BaseModel):
                     print("WARNING: more than one node has the title {}. We're going to apply modifications to all of them. Be sure that this is what you want.".format(node_identifier))
             if not nodes:
                 
-                console.print("  [yellow]Could not find a node for identifier [/][blue]{}[/]".format(node_identifier))
+                console.print("[yellow]:warning:  Could not find a node for identifier [/][blue]{}[/]".format(node_identifier))
             for node in nodes:
                 input = node.get_input_by_name(input_identifier)
 

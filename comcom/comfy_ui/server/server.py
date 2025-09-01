@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from comcom.playbook.recipe import Recipe
 from comcom.comfy_ui.models.normalized.node_definition.node_definition import NormalizedNodeDefinition
 
-from comcom.comfy_ui.server.exceptions import ComfyConnectionError
+from comcom.comfy_ui.server.exceptions import ComfyConnectionError, ComfyServerError, PromptExecutionError
 
 from comcom.comfy_ui.file_management.remote_file import RemoteFile
 
@@ -70,29 +70,49 @@ class ComfyServer:
         return 'http://' + self._url_without_protocol
     
     def upload_image(self, local_file: LocalFile) -> RemoteFile:
-        request_model = self.interface_provider.ImageUploadRequestModel(filename="file_name", image_data=local_file.data)
+        import requests
+        
+        request_model = self.interface_provider.ImageUploadRequestModel(
+            filename=local_file.name, 
+            image_data=local_file.data)
+        upload_image_uri = f"http://{self._url_without_protocol}/{request_model.endpoint}"
         try:
-            http_response = urllib.request.urlopen(
-                f"http://{self._url_without_protocol}/{request_model.endpoint}", 
+            # TODO: Figure how how to make post requests lol
+            http_response = requests.post(
+                upload_image_uri, 
                 files=request_model.files, 
                 data=request_model.data
             )
-        except urllib.error.URLError as e:
-            raise ComfyConnectionError("Failed to upload image: {}".format(str(e)))
+        except requests.exceptions.RequestException as e:
+            raise ComfyConnectionError(
+                message="Failed to parse response from Comfy Server",
+                server_url=upload_image_uri,
+                error_message=str(e)
+                )
+        
+        if http_response.status_code != 200:
+            raise ComfyServerError(
+                message="Failed to upload image: {}".format(str(local_file)),
+                server_url=upload_image_uri,
+                error_message=http_response.text
+            )
+        
         try:
-            image_upload_response = self.IMAGE_UPLOAD_RESPONSE_MODEL.model_validate(http_response.content)
+            image_upload_response = self.interface_provider.ImageUploadResponseModel.model_validate_json(http_response.content)
         except ValidationError as e:
+            # TODO: formalize how we want to handle unexpected responses from the server.
             self.console.print(e)
-            self.console.log(f"Error occurred parsing response from comfyui server during {self.IMAGE_UPLOAD_ENDPOINT} request.")
+            self.console.log(f"Error occurred parsing response from comfyui server during {request_model.endpoint} request.")
             self.console.print("Actual returned data:")
             self.console.print(http_response.content)
-            # TODO: convert to `self.IMAGE_UPLOAD_ERROR_RESPONSE_MODEL`
+            raise e
         
         # Now create/overwrite a metadata file next to the local file
-        metadata: MediaMetadata = MediaMetadata.from_local_and_remote_file(local_file, image_upload_response.remote_file)
+        uploaded_image_remote_file = image_upload_response.to_remote_file()
+        metadata: MediaMetadata = MediaMetadata.from_local_and_remote_files(local_file, uploaded_image_remote_file)
         metadata.save()
 
-        return image_upload_response.remote_file
+        return uploaded_image_remote_file
     
     def get_remote_file_from_local_file(self, local_file: LocalFile) -> RemoteFile:
         if local_file.metadata_file_exists:
@@ -124,6 +144,7 @@ class ComfyServer:
         load_key_to_remote_file: Dict[str: RemoteFile] = {}
         for load_key, local_file_str in recipe.load.items():
             load_key_to_remote_file[load_key] = self.get_remote_file_from_local_file(LocalFile(path=os.path.join("outputs", local_file_str))).api_name
+            print("Replaced load input \"{}\" with \"{}\"".format(local_file_str, load_key_to_remote_file[load_key]))
         api_dict, output_node_id_to_local_path_map = recipe.to_api_dict(self.node_definitions, load_key_to_remote_file)
 
         submit_prompt_request_model = self.interface_provider.SubmitPromptRequestModel(
@@ -142,19 +163,8 @@ class ComfyServer:
         try:
             return_data = json.loads(urllib.request.urlopen(req).read())
         except urllib.error.HTTPError as e:
-            errors = []
-            error_dict = json.loads(e.read())
-            for node_id, node_error_dict in error_dict.get('node_errors', {}).items():
-                for error in node_error_dict.get('errors', []):
-                    errors.append(
-                        "Node {node_id} ({node_type}) failed with error \"{error_text}.\" [{extra}]".format(
-                            node_id=node_id, 
-                            node_type=node_error_dict.get('class_type', "Unknown node class type"),
-                            error_text=error.get('details', "Unknown error"),
-                            extra=error.get('extra_info', "")))            
-            for error in errors:
-                print("Errors occurred submitting prompt:")
-                print("  {}".format(error))
+            submit_prompt_error_response_model = self.interface_provider.SubmitPromptErrorResponseModel.model_validate_json(e.read())
+            raise PromptExecutionError(str(submit_prompt_error_response_model))
 
         prompt_id = return_data['prompt_id']
 

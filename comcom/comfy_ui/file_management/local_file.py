@@ -14,7 +14,11 @@ class LocalFile(BaseModel):
         return Path(path_obj_or_str)
 
     def __str__(self):
-        return str("LocalFile<{}>".format(str(self.path)))
+        return str("LocalFile(path={})".format(str(self.path_str)))
+
+    @property
+    def name(self) -> str:
+        return self.path.name
 
     @property
     def path_str(self) -> str:

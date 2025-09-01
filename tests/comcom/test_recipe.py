@@ -84,4 +84,4 @@ def test_flattened_recipe_list():
     recipe = Recipe.model_validate(deep_yaml_load(SIMPLE_RECIPE_YAML))
     flattened_recipe_list: Dict[str, Recipe] = recipe.get_flattened_children()
     assert recipe.id == 'root'
-    assert len(flattened_recipe_list.keys()) == 4
+    assert len(flattened_recipe_list.keys()) == 5

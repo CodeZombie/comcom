@@ -40,6 +40,12 @@ class Comfy_v1_0_NodeDefinition(BaseModel):
     def inputs(self) -> Dict[str, Comfy_v1_0_InputDefinitions]:
         return self.input_definitions.all
     
+    def get_input_definition(self, name: str) -> Comfy_v1_0_InputDefinitions | None:
+        for input_def_name, input_def in self.inputs.items():
+            if input_def_name == name:
+                return input_def
+        return None
+    
     @property
     def outputs(self):
         # TODO: Figure out what to do with this.

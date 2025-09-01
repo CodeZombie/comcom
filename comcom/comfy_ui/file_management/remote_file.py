@@ -11,6 +11,6 @@ class RemoteFile(BaseModel):
 
     @property
     def api_name(self):
-        if self.type:
+        if self.type and self.type.lower() != "input":
             return "{} [{}]".format(self.filename, self.type.lower())
         return self.filename

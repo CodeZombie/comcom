@@ -12,7 +12,7 @@ from rich.live import Live
 from comcom.playbook.template_solver.exceptions import InvalidKeyException, LoopDetectedException
 
 
-from comcom.comfy_ui.server.exceptions import ComfyConnectionError
+from comcom.comfy_ui.server.exceptions import ComfyConnectionError, ComfyServerError, PromptExecutionError
 
 from comcom.comcom import ComCom
 
@@ -115,7 +115,7 @@ class ComComCLI:
             with Live(self.progress):
                 comcom.execute_recipe(recipe, self.on_node_progress)
             
-        except ComfyConnectionError as e:
+        except (ComfyConnectionError, ComfyServerError, PromptExecutionError) as e:
             raise ComComCLIException("[red][bold]ERROR: [/]{}[/]".format(str(e)))
         
     def on_node_progress(self, node_id, value, max):
