@@ -40,8 +40,45 @@ We're also going to write something to swap `Load Image` to `Load Image (from ou
 
 # Big todo:
 Figure out why running the same workflow twice, without changing either images or workflow data, causes it to run again if you run a different workflow in-between.
+
 Actually, I don't need to figure this out. I already know.
 It's because running a second workflow unloads the state of the last one.
 We need to manage workflow state manually.
 We can do this by storing a hash of the entire workflow data and all input images in a metadata file and reading that before generating.
 Not sure where we're gonna store this metadata file. Maybe in a hidden folder???
+
+I think we should do a few things:
+1. Resolve all input images on `WorkflowInstance` init. This way we always have the paths available.
+2. Generate a hash of the api workflow (that is, the entire resolved `CommonWorkflow.to_api_dict` dict) 
+   PLUS the hashes of the input images. Store this hash in the `WorkflowInstance` object.
+3. Now when we go to run a WorkflowInstance, we compare the cached hash to the current hash value. If they're the same, do the following:
+    3.1. Check to see if the output files exist on disk and have metadata files AND that the metadata hashes match the actual hashes of the images.
+    3.2. If any of these conditions fail, run the workflow.
+   If they're not the same, run the workflow.
+
+Workflow Instance Hash algorithm:
+1. Inside the WorkflowInstance.__init__ method, generate the `CommonWorkflow.to_api_dict` dict. Store this as `a`
+2. Generate a hash of all the input images (actual image hashes, not the cached hash). Store this as `b`.
+3. Store `hash(a + b)` as `WorkflowInstance.hash`
+Now, when we try to run the workflow:
+
+The WorkflowInstance should also have a `is_dirty` property, which does the following:
+1. If the metadata file does not exist, return `True`
+2. If the hash in the metadata file does not match this instance's hash, return True.
+3. For each Output Image:
+    1. Check to see if the output file exists. If it does not, return `True`
+    2. Check to see if the output file has a metadata file. If it does not, return `True`
+    3. Check to see if the output file's hash matches the actual hash of the image. If it does not, return `True`
+4. Return `False`
+
+The WorkflowInstance should have a `.execute()` method which takes a `ComfyServer`.
+The WorkflowInstance.__init__ should also recieve a path to it's future metadata file.
+Note: metadata paths should be constructed as directories, not `path.to.my.workflow` because workflows can nest infinitely deep, and filenames can only be so long.
+
+
+# vscode syntax highlighting for yaml recipes
+The recipe yaml format is both specifically structured and includes some special non-standard features.
+It would be incredibly useful to have some special syntax highlighting in vscode for editing recipe files.
+At minimum, some special highlighting for the different sections (values, load, input, output) of recipes.
+However, if at all possible, it would be excellent to turn this into an entire extension that resolves values on the fly to show you
+what your values will look like after interpolation, AND to hightlight errors/cycles.

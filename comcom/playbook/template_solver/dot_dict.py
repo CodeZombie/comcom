@@ -5,6 +5,8 @@ class DotDict(dict):
     def __getattr__(self, name):
         if name in self.keys():
             return self[name]
+        if name == "*":
+            return self.str_csv
         raise KeyError(name)
 
     def __init__(self, d: Dict) -> Self:
@@ -23,6 +25,20 @@ class DotDict(dict):
             else:
                 flattened_keys.append(key)
         return flattened_keys
+    
+    def get_deep_str_values(self) -> List[str]:
+        values: List[str] = []
+        for k, v in self.items():
+            if isinstance(v, str):
+                values.append(v)
+            elif isinstance(v, dict):
+                values.extend(v.get_deep_str_values())
+        return values
+    
+    @property
+    def str_csv(self):
+        values: List[str] = self.get_deep_str_values()
+        return ', '.join(values)
 
     def to_dict(self) -> Dict:
         output_dict: Dict = {}

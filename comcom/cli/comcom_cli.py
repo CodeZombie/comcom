@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 import os
 import argparse
 import yaml
@@ -9,8 +9,10 @@ from rich.prompt import Prompt
 from rich.progress import Progress
 from rich.live import Live
 
+from comcom.playbook.template_solver.exceptions import InvalidKeyException, LoopDetectedException
+
+
 from comcom.comfy_ui.server.exceptions import ComfyConnectionError
-from comcom.playbook.playbook import Playbook
 
 from comcom.comcom import ComCom
 
@@ -35,94 +37,83 @@ FUN_EMOJIS = [
     ]
 
 class ComComCLI:
-    
-    def __init__(self, comcom: ComCom):
+    def __init__(self, comcom: ComCom, project_directory: str, recipe_file: str, recipe_path: str, no_input: bool, recursive=False):
         self.console = Console()
+        self.comcom = comcom
+
         self.console.print("\n [b][blue]com[/][cyan]com[/][/] [bright_black]v0.1.0[/]".format(random.choice(FUN_EMOJIS)))
         self.console.print(" [bright_black]the comfyui workflow composer.[/]")
         self.console.print(" [bright_black]https://github.com/CodeZombie/comcom[/]\n")
 
-        args = self.parse_args()
-
-        if args.playbook_directory is not None:
-            if comcom.set_root_path(args.playbook_directory):
-                self.console.print("[green]Set [bold]project directory[/] to [cyan]{}[/]\n".format(os.path.abspath(args.playbook_directory)))
-            else:
-                raise ComComCLIException("[red]Invalid path: {}".format(os.path.abspath(args.playbook_directory)))
-            
-        if len(comcom.playbook_files) == 0:
-            raise ComComCLIException("[red]No playbooks found in {}".format(comcom.root_path))
+        if project_directory:
+            project_directory = '.'
         
-        if args.playbook is not None:
-            if not comcom.set_playbook_filename(args.playbook):
-                self.console.print("[red]Playbook {} not found in {}".format(args.playbook, comcom.root_path))
+        project_directory = os.path.abspath(project_directory)
 
-        if not comcom.playbook_filename and not args.no_input:
-            self.console.print("[blue bold]Select a playbook:")
-            for index, pb in enumerate(comcom.playbook_files):
-                self.console.print("  [yellow]{}[/]:[bold]{}[/]".format(index + 1, pb))
-            while comcom.playbook_filename is None:
-                selected_playbook_index = input("[bold]Playbook[/] [gray](name or index)[/]: ")
-                if selected_playbook_index.isnumeric() and int(selected_playbook_index) > 0 and int(selected_playbook_index) <= len(comcom.playbook_files):
-                    if comcom.set_playbook_filename(comcom.playbook_files[int(selected_playbook_index) - 1]):
-                        break
+        if comcom.set_project_root_path(project_directory):
+            self.console.print("Set [bold]project directory[/] to [cyan]{}[/]\n".format(os.path.abspath(project_directory)))
+        else:
+            raise ComComCLIException("[red]Invalid path: {}".format(os.path.abspath(project_directory)))
+        
+        if len(comcom.recipe_files) == 0:
+            raise ComComCLIException("[red]No recipe files found in {}".format(comcom.project_root_path))
+        
+        if recipe_file is not None:
+            if not comcom.select_recipe_file(recipe_file):
+                invalid_recipe_file_message = "[red]Invalid recipe path. Recipe \"{}\" not found in {}".format(recipe_file, comcom.project_root_path)
+                if no_input:
+                    raise ComComCLIException(invalid_recipe_file_message)
                 else:
-                    if comcom.set_playbook_filename(selected_playbook_index):
-                        break
-                self.console.print("[red]Invalid playbook name or index: {}".format(selected_playbook_index))
+                    self.console.print(invalid_recipe_file_message)
 
-        elif not comcom.playbook_filename and args.no_input:
+        if not comcom.selected_recipe and not no_input:
+            self.console.print("[blue bold]Select a recipe file:")
+            for index, value in enumerate(comcom.recipe_files):
+                self.console.print("  [yellow]{}[/]:[bold]{}[/]".format(index + 1, value))
+            while comcom.selected_recipe is None:
+                selected_recipe_value = input("[bold]Playbook[/] [gray](name or index)[/]: ")
+                if selected_recipe_value.isnumeric() and int(selected_recipe_value) > 0 and int(selected_recipe_value) <= len(comcom.recipe_files):
+                    selected_recipe_value = comcom.recipe_files[int(selected_recipe_value) - 1]
+                    
+                if comcom.select_recipe_file(selected_recipe_value):
+                    break
+                self.console.print("[red]Invalid recipe file name or index: {}".format(selected_recipe_value))
+
+        elif not comcom.selected_recipe and no_input:
             raise ComComCLIException("[red]No playbook specified[/]. Please specify a playbook file by name using the [green]--playbook[/] argument")
 
-        playbook_path = comcom.playbook_path
-        if not os.path.exists(playbook_path):
-            raise ComComCLIException("[red]Playbook {} not found in {}".format(comcom.playbook_filename, comcom.root_path))
-        
-        try:
-            playbook_yaml = yaml.load(open(playbook_path), Loader=yaml.FullLoader)
-        except Exception as e:
-            raise ComComCLIException("[red]Failed to parse playbook yaml file:[/] {}: {}".format(comcom.playbook_filename, e))
-        
-        try:
-            playbook = Playbook.from_dict(playbook_yaml)
-        except Exception as e:
-            raise ComComCLIException("[red]Error parsing playbook:[/] {}: {}".format(comcom.playbook_filename, e))
+        self.console.print("Set [bold]recipe file[/] to [cyan]{}.yaml[/]\n".format(comcom.selected_recipe.id))
 
-        self.console.print("[green]Set [bold]playbook[/] to [cyan]{}.yaml[/]\n".format(comcom.playbook_filename))
+        recipe = None
+        if recipe_path:
+            recipe = comcom.get_recipe(recipe_path)
+        if not recipe:
+            if no_input:
+                raise ComComCLIException("[red]Invalid recipe path:[/] \"{}\"".format(recipe_path))
+            flattened_recipe_paths = [comcom.selected_recipe.id] + list(comcom.selected_recipe.get_flattened_children().keys())
+            self.console.print("Select a recipe from {}:".format(comcom.selected_recipe.id))
+            for index, value in enumerate(flattened_recipe_paths):
+                self.console.print("  [yellow]{}[/]: [bold]{}[/]".format(index + 1, value))
+            while recipe is None:
+                selected_recipe_path_value = Prompt.ask("  [bold]Recipe[/] [gray](name or index)[/]: ", default="1")
+                if selected_recipe_path_value.isnumeric() and int(selected_recipe_path_value) > 0 and int(selected_recipe_path_value) <= len(flattened_recipe_paths):
+                    selected_recipe_path_value = flattened_recipe_paths[int(selected_recipe_path_value) - 1]
 
-        workflow_name = args.workflow
-        if workflow_name not in playbook.workflow_names:
-            if args.no_input:
-                if workflow_name is None:
-                    raise ComComCLIException("[red]No workflow specified[/]. Please specify a workflow by name using the --workflow (-w) argument.")
-                else:
-                    raise ComComCLIException("[red]Workflow not found:[/] \"{}\"".format(workflow_name))
-                
-            self.console.print("Select a workflow:")
-            for index, pb in enumerate(playbook.workflow_names):
-                self.console.print("  [yellow]{}[/]: [bold]{}[/]".format(index + 1, pb))
-            while workflow_name not in playbook.workflow_names:
-                selected_workflow_value = Prompt.ask("  [bold]Workflow[/] [gray](name or index)[/]: ", default="1")
-                if selected_workflow_value.isnumeric() and int(selected_workflow_value) > 0 and int(selected_workflow_value) <= len(comcom.playbook_files):
-                    workflow_name = playbook.workflow_names[int(selected_workflow_value) - 1]
+                recipe = comcom.get_recipe(selected_recipe_path_value)
+                if recipe:
                     break
-                elif selected_workflow_value in playbook.workflow_names:
-                    workflow_name = selected_workflow_value
-                    break
-                self.console.print("[red]Invalid workflow name or index: {}".format(selected_workflow_value))
+                self.console.print("[red]Invalid recipe name or index: {}".format(selected_recipe_path_value))
 
-        self.console.print("[green]Set [bold]workflow[/] to [cyan]{}[/]".format(workflow_name))
+        self.console.print("Set [bold]recipe[/] to [red]{}.yaml[/].[cyan]{}[/]".format(comcom.selected_recipe.id, recipe.id))
 
         #on_node_progress = lambda node, value, max: self.console.print("[bold]{}[/]: [yellow]{}[/] / [yellow]{}[/]".format(node, value, max))
 
-
-
         self.progress = Progress()
         self.progress_task_ids: Dict = {} # node_id: task_id
-        workflow = playbook.get_workflow_by_path(workflow_name)
+
         try:
             with Live(self.progress):
-                comcom.submit_workflow(workflow, self.on_node_progress)
+                comcom.execute_recipe(recipe, self.on_node_progress)
             
         except ComfyConnectionError as e:
             raise ComComCLIException("[red][bold]ERROR: [/]{}[/]".format(str(e)))
@@ -132,14 +123,4 @@ class ComComCLI:
             self.progress_task_ids[node_id] = self.progress.add_task("Processing node [bold]#{}[/]".format(node_id), total=max)
 
         self.progress.update(self.progress_task_ids[node_id], completed=value)
-        
-
-    def parse_args(argv):
-        parser = argparse.ArgumentParser()
-        parser.add_argument('playbook_directory', default='.', nargs='?')
-        parser.add_argument('--playbook', '-p', default=None, required=False)
-        parser.add_argument('--workflow', '-w', default=None, required=False)
-        # Add an argument to allow the user to specify whether the program should ask for input in the case of missing data, or if it should just fail.
-        # By default, the program will ask for input.
-        parser.add_argument('--no-input', '-n', action='store_true', default=False, required=False, help='Do not ask for input in the case of missing data. Instead, just fail.')
-        return parser.parse_args()
+    

@@ -6,6 +6,16 @@ from comcom.cli.comcom_cli import ComComCLI, ComComCLIException
 from comcom.comcom import ComCom
 from rich.console import Console
 
+def parse_comcom_cli_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('project_directory', default='.', nargs='?')
+    parser.add_argument('--recipe-file', '-f', default=None, required=False)
+    parser.add_argument('--recipe-path', '-p', default=None, required=False)
+    parser.add_argument('--recursive', '-r', default=False, required=False) # if true, will execute the selected workflow and _all_ children.
+    parser.add_argument('--no-input', '-n', action='store_true', default=False, required=False, help='Do not ask for input in the case of missing data. Instead, just fail.')
+    return parser.parse_args()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--interactive', '-i', action="store_true", default=False, required=False)
@@ -15,9 +25,20 @@ def main():
     if args.interactive:
         print("This would start comcom in interactive mode if that was implemented.")
         return
+    
+    # CLI MODE
+    cli_args = parse_comcom_cli_args()
+
     comcom = ComCom()
     try:
-        ComComCLI(comcom)
+        ComComCLI(
+            comcom, 
+            project_directory=cli_args.project_directory,
+            recipe_file=cli_args.recipe_file,
+            recipe_path=cli_args.recipe_path,
+            no_input=cli_args.no_input,
+            recursive=cli_args.recursive
+        )
     except ComComCLIException as e:
         Console().print(str(e))
         sys.exit(1)

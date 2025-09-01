@@ -28,8 +28,7 @@ def test_dot_dict_solve_b():
         'c': '{d}',
         'd': '{a}'
     }
-    
-    with pytest.raises(LoopDetectedException, match=r".*\[\'a\', \'b\', \'c\', \'d\'\].*"):
+    with pytest.raises(LoopDetectedException, match=r".*a, b, c, d.*"):
         TemplateDictSolver.solve(data)
 
 def test_dot_dict_solve_c():
@@ -39,7 +38,7 @@ def test_dot_dict_solve_c():
         'c': '{a}'
     }
 
-    with pytest.raises(LoopDetectedException, match=r".*\[\'a\', \'b\', \'c\'\].*"):
+    with pytest.raises(LoopDetectedException, match=r".*a, b, c.*"):
         TemplateDictSolver.solve(data)
 
 def test_dot_dict_solve_d():
@@ -47,7 +46,7 @@ def test_dot_dict_solve_d():
         'a': '{b}',
         'b': '{a}'
     }
-    with pytest.raises(LoopDetectedException, match=r".*\[\'a\', \'b\'\].*"):
+    with pytest.raises(LoopDetectedException, match=r".*a, b.*"):
         TemplateDictSolver.solve(data)
 
 def test_dot_dict_solve_e():
@@ -55,7 +54,7 @@ def test_dot_dict_solve_e():
         'a': '{a}',
         'b': '{b}'
     }
-    with pytest.raises(LoopDetectedException, match=r".*\[\'a\', \'b\'\].*"):
+    with pytest.raises(LoopDetectedException, match=r".*a, b.*"):
         TemplateDictSolver.solve(data)
 
 def test_dot_dict_solve_f():
@@ -81,7 +80,7 @@ def test_dot_dict_with_circular_reference():
         
     }
 
-    with pytest.raises(LoopDetectedException, match=r".*\[\'job_title\', \'informal_title\'\].*"):
+    with pytest.raises(LoopDetectedException, match=r".*job_title, informal_title.*"):
         TemplateDictSolver.solve(data)
 
 def test_unknown_key():
@@ -107,3 +106,20 @@ def test_nested_unknown_key():
     
     with pytest.raises(InvalidKeyException, match=r"^Attempting to access unknown key \'street_name\' in template \'stats.address\'.*"):
         TemplateDictSolver.solve(data)
+
+def test_cascading_a():
+    data_parent = {
+        'first_name': "John",
+        'last_name': "Doggett",
+        'name': "{first_name} {last_name}",
+    }
+
+    data_child = {
+        'title': "Special Agent",
+        'full title': "{title} {name}"
+    }
+
+    parent_solved = TemplateDictSolver.solve(data_parent)
+    child_solved = TemplateDictSolver.solve(data_child, parent_solved)
+
+    assert child_solved.get('full title') == "Special Agent John Doggett"

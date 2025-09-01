@@ -2,7 +2,7 @@ from typing import Dict, Tuple, List
 import copy
 import re
 import itertools
-
+from rich.console import Console
 from .exceptions import LoopDetectedException, InvalidKeyException, MaximumResolutionDepthException
 from .dot_dict import DotDict
 
@@ -15,8 +15,26 @@ def nested_replace(dictionary: Dict, substring: str, replace_with: str) -> Dict:
             dictionary[key] = nested_replace(dictionary[key], substring, replace_with)
     return dictionary
 
+def deep_merge_dicts(dict1, dict2):
+    """
+    Recursively merges dict2 into dict1.
+    Values from dict2 will overwrite values from dict1 in case of conflicts,
+    unless both values are dictionaries, in which case they are merged recursively.
+    """
+    merged_dict = dict1.copy()  # Create a copy to avoid modifying dict1 in place
+
+    for key, value in dict2.items():
+        if key in merged_dict and isinstance(merged_dict[key], dict) and isinstance(value, dict):
+            # If both values are dictionaries, merge them recursively
+            merged_dict[key] = deep_merge_dicts(merged_dict[key], value)
+        else:
+            # Otherwise, overwrite the value in merged_dict with the value from dict2
+            merged_dict[key] = value
+    return merged_dict
+
 class TemplateDictSolver:
-    placeholder_pattern = re.compile(r'\{([^}]+)\}[^}]|^\$(.+)') # Matches '{val}' or '$val'
+    # TODO: Validate that this regex is correct and not stupid slow
+    placeholder_pattern = re.compile(r'(?<!\{)\{([^{}]+)\}(?!\})|^\$(.+)') # Matches '{val}' or '$val' but not '{{val}}'
     # \{([^}]+)\}[^}]|^\$(.+)
     max_iterations: int = 16
     ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN = "_!*COMCOM_OPEN_ESCAPE_CURLY_BRACKET*!_"
@@ -86,13 +104,13 @@ class TemplateDictSolver:
 
         while iteration_count < TemplateDictSolver.max_iterations:
             iteration_count += 1
-            TemplateDictSolver._in_place_solve_step(solved_dict, extra_data_source | solved_dict)
+            TemplateDictSolver._in_place_solve_step(solved_dict, deep_merge_dicts(extra_data_source, solved_dict)) # extra_data_source | solved_dict
             step_history, step_hash = TemplateDictSolver.get_unresolved_placeholder_map(solved_dict)
             unresolved_keys = TemplateDictSolver.get_non_empty_keys_from_dict_of_lists(step_history)
             if not unresolved_keys:
                 return solved_dict
             if step_hash in history.keys():
-                raise LoopDetectedException("Loop detected between the following keys: {}".format(unresolved_keys))
+                raise LoopDetectedException(unresolved_keys)
             history[step_hash] = step_history
 
         # This should never really be reached. 
@@ -118,12 +136,11 @@ class TemplateDictSolver:
                             value = value.get(v, None)
                         data[key] = value
                     else:
-                        
                         data[key] = data[key] \
                         .replace("{{", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN) \
                         .replace("}}", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED) \
                         .format(**dot_dict_data_source) \
-                        .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN, "{{",) \
+                        .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN, "{{") \
                         .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED, "}}")
                 except (KeyError, AttributeError) as e:
                     raise InvalidKeyException(
