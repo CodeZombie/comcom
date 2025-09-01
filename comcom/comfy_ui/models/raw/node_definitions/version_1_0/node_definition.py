@@ -1,7 +1,7 @@
 # pylint: disable=no-member
 
-from typing import Dict, List, Self
-from pydantic import BaseModel, Field, AliasPath
+from typing import Dict, List, Self, Any
+from pydantic import BaseModel, Field, AliasPath, field_validator
 
 from .input_definitions import Comfy_v1_0_InputDefinitions
 
@@ -21,6 +21,19 @@ class Comfy_v1_0_NodeDefinition(BaseModel):
     #input_order: Dict[str, List[str]]
 
 
+    # A Node Definition's `output` (Which is supposed to list the Types of each output) will sometimes contains 
+    # a List of strings (ie ImpactSchedulerAdapter). I think it being a list (of all possible outputs, I think?) it indicates that
+    # This node's output is `LIST`. I'm not sure though, and I really can't think of a trivial way to confirm.
+    # I'm rolling with this theory for now.
+    @field_validator('output', mode='before')
+    def _sanitize_output(cls, values: Any) -> List[str]:
+        results: List[str] = []
+        for item in values:
+            if isinstance(item, list):
+                results.append("LIST")
+            else:
+                results.append(item)
+        return results
 
 
     @property

@@ -50,7 +50,7 @@ class Recipe(BaseModel):
 
     def model_post_init(self, __context):
         for recipe_id, recipe in self.recipes.items():
-            recipe.id = recipe_id 
+            recipe.id = recipe_id
 
     def solve(self, parent_values: Dict = {}):
         parent_values_without_grandparent = parent_values.copy()
@@ -63,7 +63,7 @@ class Recipe(BaseModel):
         except (InvalidKeyException, LoopDetectedException) as e:
             e.recipe_path.insert(0, self.id)
             raise e
-        Console().print(self.input)
+        
         for child_recipe in self.recipes.values():
             try:
                 child_recipe.solve(deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values } | {'input': self.input} | {'output': self.output} | {'load': self.load})
@@ -72,12 +72,12 @@ class Recipe(BaseModel):
                 raise e
             
     def to_api_dict(self, node_definitions: List[NormalizedNodeDefinition], load_remote_file_map: Dict[str, str]) -> Dict:
+        console = Console()
         comfy_workflow = Comfy_V0_4_Workflow.model_validate_json(open(os.path.join('workflows', self.workflow)).read()).to_normalized(node_definitions).to_common(node_definitions)
         # Sanity check the workflow:
         for node in comfy_workflow.nodes:
             if '.' in node.title:
                 raise InvalidNodeInWorkflowExceptionc(node.title, node.id, self.workflow, "Node names should not contain a '.' character")
-
         all_solved_values = flatten_dict(self.input) | flatten_dict(load_remote_file_map)
         for key, value in all_solved_values.items():
             input_path = key.rsplit('.', 1)
@@ -98,7 +98,8 @@ class Recipe(BaseModel):
                 if len(nodes) > 1:
                     print("WARNING: more than one node has the title {}. We're going to apply modifications to all of them. Be sure that this is what you want.".format(node_identifier))
             if not nodes:
-                print("Could not find a node for identifier {}".format(node_identifier))
+                
+                console.print("  [yellow]Could not find a node for identifier [/][blue]{}[/]".format(node_identifier))
             for node in nodes:
                 input = node.get_input_by_name(input_identifier)
 
@@ -145,7 +146,7 @@ class Recipe(BaseModel):
             for node in comfy_workflow.nodes:
                 if node.type == "LoadImage":
                     image_input = node.get_input_by_name('image')
-                    if image_input and image_input.value.endswith(" [output]"):
+                    if image_input and image_input.value.endswith(" [Output]"):
                         node.type = "LoadImageOutput"
             # Hack over.
 

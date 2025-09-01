@@ -124,7 +124,6 @@ class ComfyServer:
         load_key_to_remote_file: Dict[str: RemoteFile] = {}
         for load_key, local_file_str in recipe.load.items():
             load_key_to_remote_file[load_key] = self.get_remote_file_from_local_file(LocalFile(path=os.path.join("outputs", local_file_str))).api_name
-
         api_dict, output_node_id_to_local_path_map = recipe.to_api_dict(self.node_definitions, load_key_to_remote_file)
 
         submit_prompt_request_model = self.interface_provider.SubmitPromptRequestModel(
