@@ -32,7 +32,7 @@ class ComCom:
         recipe_files = []
         for file in os.listdir(self.project_root_path):
             if file.endswith(".yaml"):
-                recipe_files.append(file.rstrip(".yaml"))
+                recipe_files.append(file[:-len('.yaml')])
         return recipe_files
     
     @property
@@ -49,7 +49,10 @@ class ComCom:
             self.select_recipe_file(self.recipe_files[0])
             #self._selected_recipe_file = 
             return True
-        return False
+        if len(self.recipe_files) > 1:
+            return True
+        
+        return True
     
 
     @property

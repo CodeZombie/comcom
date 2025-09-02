@@ -90,7 +90,10 @@ class ComComCLI:
         if not recipe:
             if no_input:
                 raise ComComCLIException("[red]Invalid recipe path:[/] \"{}\"".format(recipe_path))
-            flattened_recipe_paths = [comcom.selected_recipe.id] + list(comcom.selected_recipe.get_flattened_children().keys())
+            flattened_recipe_paths = [comcom.selected_recipe.id] if comcom.selected_recipe.is_executable else []
+            flattened_recipe_paths.extend(list(comcom.selected_recipe.get_executable_flattened_children().keys()))
+            if len(flattened_recipe_paths) == 0:
+                raise ComComCLIException("Recipe file \"{}\" is not executable and has no executable recipes.".format(comcom.selected_recipe.id))
             self.console.print("Select a recipe from {}:".format(comcom.selected_recipe.id))
             for index, value in enumerate(flattened_recipe_paths):
                 self.console.print("  [yellow]{}[/]: [bold]{}[/]".format(index + 1, value))

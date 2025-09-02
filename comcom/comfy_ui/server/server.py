@@ -14,6 +14,7 @@ from rich.console import Console
 from pydantic import ValidationError
 from comcom.playbook.recipe import Recipe
 from comcom.comfy_ui.models.normalized.node_definition.node_definition import NormalizedNodeDefinition
+from comcom.playbook.exceptions import RecipeException
 
 from comcom.comfy_ui.server.exceptions import ComfyConnectionError, ComfyServerError, PromptExecutionError
 
@@ -222,6 +223,9 @@ class ComfyServer:
         
         for node_id, output in prompt_history_response.get_output_nodes_from_prompt_id(prompt_id).items():
             for remote_file in output.images:
+                local_path_str = output_node_id_to_local_path_map.get(node_id)
+                if local_path_str == None:
+                    continue
                 local_path = LocalFile(path=os.path.join("outputs", output_node_id_to_local_path_map.get(node_id)))
                 remote_file = remote_file.to_remote_file()
                 # Save the remote image locally, if it needs to be saved.

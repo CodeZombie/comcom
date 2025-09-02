@@ -13,3 +13,5 @@ class InvalidNodeInWorkflowExceptionc(Exception):
             self.workflow_name,
             self.specific_problem_description
         )
+    
+class RecipeException(Exception): pass

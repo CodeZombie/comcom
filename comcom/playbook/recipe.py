@@ -48,6 +48,10 @@ class Recipe(BaseModel):
     output: Optional[Dict[str, str]] = {}
     recipes: Optional[Dict[str, Self]] = {}
 
+    @property
+    def is_executable(self):
+        return self.workflow != None
+
     def model_post_init(self, __context):
         for recipe_id, recipe in self.recipes.items():
             recipe.id = recipe_id
@@ -189,6 +193,10 @@ class Recipe(BaseModel):
             for child_id, child in child_recipe.get_flattened_children().items():
                 flattened_dict["{}.{}".format(self.id, child_id)] = child
         return flattened_dict
+    
+    def get_executable_flattened_children(self):
+        flat_children = self.get_flattened_children()
+        return {k: v for k, v in flat_children.items() if v.is_executable}
 
     # def print(self, id, prfx=""):
     #     print("{}{}".format(prfx, id))
