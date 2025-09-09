@@ -123,3 +123,51 @@ def test_cascading_a():
     child_solved = TemplateDictSolver.solve(data_child, parent_solved)
 
     assert child_solved.get('full title') == "Special Agent John Doggett"
+
+def test_solve_list():
+    data = {
+        'first_name': 'CGB',
+        'last_name': 'Spender',
+        'nemesis': "Fox",
+        'children': [
+            '{nemesis} Mulder',
+            'Jeffrey {last_name}',
+            1234,
+        ]
+    }
+
+    solved = TemplateDictSolver.solve(data)
+    assert solved.get('children')[0] == "Fox Mulder"
+    assert solved.get('children')[1] == "Jeffrey Spender"
+    assert solved.get('children')[2] == 1234
+
+def test_solve_list_with_extra_data():
+    data = {
+        'first_name': 'CGB',
+        'last_name': 'Spender',
+        'nemesis': "Fox",
+        'children': [
+            '{nemesis} Mulder',
+            'Jeffrey {last_name}',
+            1234,
+        ],
+        'enemies': [
+            'Dana Scully',
+            'Walter Skinner'
+        ]
+    }
+
+    more_data = {
+        'name': "Alex Krycek",
+        'works_for': [
+            '{first_name} {last_name}'
+        ],
+        'antagonists': [
+            "{enemies[0]}"
+        ]
+
+    }
+
+    solved = TemplateDictSolver.solve(more_data, TemplateDictSolver.solve(data))
+    solved['works_for'][0] == "CGB Spender"
+    solved['antagonists'][0] == "Dana Scully"

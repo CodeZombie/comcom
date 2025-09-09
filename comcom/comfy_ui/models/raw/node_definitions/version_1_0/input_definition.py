@@ -15,7 +15,6 @@ class Comfy_v1_0_InputDefinition(RootModel[List[str | List | Dict[str, Any] | No
     
     @property
     def type(self) -> str | None:
-        
         if len(self) > 0:
             if isinstance(self[0], List):
                 return "ENUM"

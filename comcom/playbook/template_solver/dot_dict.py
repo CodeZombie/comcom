@@ -5,8 +5,10 @@ class DotDict(dict):
     def __getattr__(self, name):
         if name in self.keys():
             return self[name]
-        if name == "*":
+        elif name == "*":
             return self.str_csv
+        elif name == "__deepcopy__":
+            return self.get('__deepcopy__')
         raise KeyError(name)
 
     def __init__(self, d: Dict) -> Self:

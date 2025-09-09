@@ -16,14 +16,21 @@ class MediaMetadata(BaseModel):
 
     @field_validator('local_path', mode='before')
     @classmethod
-    def _filepath_str_to_localfile(cls, local_path_str: str | LocalFile) -> LocalFile | None:
+    def _filepath_str_to_localfile(cls, local_path_str: Dict | LocalFile) -> LocalFile | None:
         if isinstance(local_path_str, LocalFile):
             return local_path_str
-        return LocalFile(path=local_path_str)
+        return LocalFile(path=local_path_str.get('path'), requires_editing=local_path_str.get('requires_editing', False))
 
-    @field_serializer('local_path')
-    def _serialize_path(self, lp: LocalFile, info: SerializationInfo) -> str:
-        return lp.path_str
+    # @field_serializer('local_path')
+    # def _serialize_path(self, lp: LocalFile, info: SerializationInfo) -> str:
+    #     return lp.path_str
+    
+    @property
+    def local_file_needs_to_be_edited_but_hasnt_been_edited_yet(self) -> bool:
+       """ verbose function names are better than ambiguous ones :) """ 
+       if self.local_path.requires_editing and self.sha1 == self.local_path.sha1:
+           return True
+       return False
 
     @classmethod
     def from_file(cls, file_path: str) -> Self:

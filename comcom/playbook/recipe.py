@@ -1,4 +1,5 @@
-from typing import Dict, Any, Self, List, Optional
+from dataclasses import dataclass
+from typing import Dict, Any, Self, List, Optional, Tuple
 from typing_extensions import TypeAliasType
 from pydantic import BaseModel, field_validator, SkipValidation
 import os
@@ -19,7 +20,7 @@ def deep_merge_dicts(dict1, dict2):
     Values from dict2 will overwrite values from dict1 in case of conflicts,
     unless both values are dictionaries, in which case they are merged recursively.
     """
-    merged_dict = dict1.copy()  # Create a copy to avoid modifying dict1 in place
+    merged_dict = dict1.copy()
 
     for key, value in dict2.items():
         if key in merged_dict and isinstance(merged_dict[key], dict) and isinstance(value, dict):
@@ -29,6 +30,13 @@ def deep_merge_dicts(dict1, dict2):
             # Otherwise, overwrite the value in merged_dict with the value from dict2
             merged_dict[key] = value
     return merged_dict
+
+@dataclass
+class SaveFileRequest:
+    output_node_id: str
+    local_path: str
+    requires_editing: bool = False
+
 
 ValidPrimativeTypes = TypeAliasType(
     'ValidPrimativeTypes',
@@ -44,8 +52,8 @@ class Recipe(BaseModel):
     workflow: Optional[str | None] = None
     values: Optional[Dict[str, ValuesDict]] = {}
     load: Optional[Dict[str, ValuesDict]] = {}
-    input: Optional[Dict[str, ValuesDict]] = {}
-    output: Optional[Dict[str, str]] = {}
+    nodes: Optional[Dict[str, ValuesDict]] = {}
+    save: Optional[Dict[str, str | Dict[str, str | List]]] = {}
     recipes: Optional[Dict[str, Self]] = {}
 
     @property
@@ -62,33 +70,33 @@ class Recipe(BaseModel):
         try:
             self.values = TemplateDictSolver.solve(self.values, parent_values_without_grandparent | {'^': parent_values})
             self.load = TemplateDictSolver.solve(self.load, parent_values_without_grandparent | {'^': parent_values})
-            self.input = TemplateDictSolver.solve(self.input, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
-            self.output = TemplateDictSolver.solve(self.output, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
+            self.nodes = TemplateDictSolver.solve(self.nodes, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
+            self.save = TemplateDictSolver.solve(self.save, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
         except (InvalidKeyException, LoopDetectedException) as e:
             e.recipe_path.insert(0, self.id)
             raise e
         
         for child_recipe in self.recipes.values():
             try:
-                child_recipe.solve(deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values } | {'input': self.input} | {'output': self.output} | {'load': self.load})
+                child_recipe.solve(deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values } | {'nodes': self.nodes} | {'save': self.save} | {'load': self.load})
             except (InvalidKeyException, LoopDetectedException) as e:
                 e.recipe_path.insert(0, self.id)
                 raise e
             
-    def to_api_dict(self, node_definitions: List[NormalizedNodeDefinition], load_remote_file_map: Dict[str, str]) -> Dict:
+    def to_api_dict(self, node_definitions: List[NormalizedNodeDefinition], load_remote_file_map: Dict[str, str]) -> Tuple[Dict | List[SaveFileRequest]]:
         console = Console()
         comfy_workflow = Comfy_V0_4_Workflow.model_validate_json(open(os.path.join('workflows', self.workflow)).read()).to_normalized(node_definitions).to_common(node_definitions)
         # Sanity check the workflow:
         for node in comfy_workflow.nodes:
             if '.' in node.title:
                 raise InvalidNodeInWorkflowExceptionc(node.title, node.id, self.workflow, "Node names should not contain a '.' character")
-        all_solved_values = flatten_dict(self.input) | flatten_dict(load_remote_file_map)
+        all_solved_values = flatten_dict(self.nodes) | flatten_dict(load_remote_file_map)
         for key, value in all_solved_values.items():
-            input_path = key.rsplit('.', 1)
-            if len(input_path) != 2:
-                raise Exception("Recipe \"{recipe_id}\"'s input \"{input_path}\" is invalid. Must be formatted like \"<node>.<input_name>\", not whatever that is.".format(recipe_id=self.id, input_path=key))
-            node_identifier = input_path[0]
-            input_identifier = input_path[1]
+            node_input_path = key.rsplit('.', 1)
+            if len(node_input_path) != 2:
+                raise Exception("Recipe \"{recipe_id}\"'s Node Input path \"{node_input_path}\" is invalid. Must be formatted like \"<node title/id>.<input_name>\", not whatever that is.".format(recipe_id=self.id, node_input_path=key))
+            node_identifier = node_input_path[0]
+            input_identifier = node_input_path[1]
             # If the node identifier starts with a $, we want to search by ID
             nodes = []
             if node_identifier.startswith('$'):
@@ -141,6 +149,7 @@ class Recipe(BaseModel):
             # good for them; had to spin up a whole new node for this one.
             #
             # Whatever. I took upon this burden of my own volition. This is my fault for writing ComCom in the first place.
+            # And who am I to talk after writing `deep_yaml.py`
             #
             # Anyway, our disgusting little hack here is to look through all the nodes in the workflow, and check for any 
             # LoadImage nodes. If their `image` values end with " [Output]", we just swap the node type to `LoadImageOutput`
@@ -154,16 +163,38 @@ class Recipe(BaseModel):
                         node.type = "LoadImageOutput"
             # Hack over.
 
-        output_node_id_to_local_path_map = {}
-        for key, local_path in self.output.items():
-            if key.startswith('$'):
-                output_node_id_to_local_path_map[key[:1]] = local_path
+        save_file_requests: List[SaveFileRequest] = []
+        for node_id_or_title, value in self.save.items():
+            node_ids = []
+            if node_id_or_title.startswith('$'):
+                node_ids = [node_id_or_title[1:]]
             else:
-                for node in comfy_workflow.get_nodes_by_title(key):
-                    output_node_id_to_local_path_map[node.id] = local_path
+                node_ids = [node.id for node in comfy_workflow.get_nodes_by_title(node_id_or_title)]
+            if not node_ids:
+                # TODO: make this a custom exception so we can print it nicer
+                raise Exception("Failed to find node: \"{}\" in workflow: \"{}\" in recipe: \"{}\". Available nodes are: {}".format(node_id_or_title, comfy_workflow.id, self.id, [node.title for node in comfy_workflow.nodes]))
 
-        return (comfy_workflow.as_api_dict(), output_node_id_to_local_path_map)
-    
+            for node_id in node_ids:
+                if isinstance(value, str):
+                    save_file_requests.append(SaveFileRequest(node_id, value, False))
+                elif isinstance(value, Dict):
+                    if 'filename' in value.keys():
+                        save_file_requests.append(SaveFileRequest(node_id, value.get('filename'), False))
+                    for requires_editing_entry in value.get('requires_editing', []):
+                        save_file_requests.append(SaveFileRequest(node_id, requires_editing_entry, True))
+                        
+
+        # output_node_id_to_local_path_map = {}
+        
+        # for key, local_path in self.save.items():
+        #     if key.startswith('$'):
+        #         output_node_id_to_local_path_map[key[:1]] = local_path
+        #     else:
+        #         for node in comfy_workflow.get_nodes_by_title(key):
+        #             output_node_id_to_local_path_map[node.id] = local_path
+
+        return (comfy_workflow.as_api_dict(), save_file_requests)
+
     def get_recipe(self, path: List[str] | str | None) -> Self | None:
         if isinstance(path, str):
             path = path.split('.')

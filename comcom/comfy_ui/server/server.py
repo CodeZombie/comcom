@@ -7,6 +7,7 @@ import urllib.error
 import json
 import time
 import hashlib
+from copy import deepcopy
 import os
 import select
 from functools import lru_cache
@@ -144,9 +145,14 @@ class ComfyServer:
         # Upload all of the recipe's input images to the comfyui server, and swap the paths.
         load_key_to_remote_file: Dict[str: RemoteFile] = {}
         for load_key, local_file_str in recipe.load.items():
-            load_key_to_remote_file[load_key] = self.get_remote_file_from_local_file(LocalFile(path=os.path.join("outputs", local_file_str))).api_name
-            print("Replaced load input \"{}\" with \"{}\"".format(local_file_str, load_key_to_remote_file[load_key]))
-        api_dict, output_node_id_to_local_path_map = recipe.to_api_dict(self.node_definitions, load_key_to_remote_file)
+            local_file = LocalFile(path=os.path.join("outputs", local_file_str))
+            if local_file.metadata_file_exists:
+                metadata = MediaMetadata.from_file(local_file.metadata_path)
+                if metadata.local_file_needs_to_be_edited_but_hasnt_been_edited_yet:
+                    raise Exception("File \"{}\" requires editing, but has not been edited yet. Get to it!".format(local_file.path_str))
+
+            load_key_to_remote_file[load_key] = self.get_remote_file_from_local_file(local_file).api_name
+        api_dict, save_file_requests = recipe.to_api_dict(self.node_definitions, load_key_to_remote_file)
 
         submit_prompt_request_model = self.interface_provider.SubmitPromptRequestModel(
             prompt_api_dict=api_dict,
@@ -221,12 +227,33 @@ class ComfyServer:
         except ValidationError as e:
             raise e # TODO: better error reporting
         
-        for node_id, output in prompt_history_response.get_output_nodes_from_prompt_id(prompt_id).items():
-            for remote_file in output.images:
-                local_path_str = output_node_id_to_local_path_map.get(node_id)
-                if local_path_str == None:
-                    continue
-                local_path = LocalFile(path=os.path.join("outputs", output_node_id_to_local_path_map.get(node_id)))
-                remote_file = remote_file.to_remote_file()
-                # Save the remote image locally, if it needs to be saved.
-                self.download_file(remote_file, local_path)
+        output_nodes = prompt_history_response.get_output_nodes_from_prompt_id(prompt_id)
+        for save_file_request in save_file_requests:
+            if not save_file_request.local_path:
+                continue
+            if save_file_request.output_node_id in output_nodes.keys():
+                file_path = os.path.join("outputs", save_file_request.local_path)
+                local_path = LocalFile(
+                    path=file_path,
+                    requires_editing=save_file_request.requires_editing)
+                prompt_history_response_model_node = output_nodes.get(save_file_request.output_node_id, None)
+                if not prompt_history_response_model_node:
+                    raise Exception("ComfyUI Prompt Response did not contain an output node with id \"{}\"".format(save_file_request.output_node_id))
+                for i in range(len(prompt_history_response_model_node.images)):
+                    remote_file = prompt_history_response_model_node.images[i].to_remote_file()
+                    if i == 0:
+                        self.download_file(remote_file, local_path)
+                    else:
+                        local_path_enumerate: LocalFile = deepcopy(local_path)
+                        local_path_enumerate.path.name += "_{}".format(str(i))
+
+
+        # for node_id, output in prompt_history_response.get_output_nodes_from_prompt_id(prompt_id).items():
+        #     for remote_file in output.images:
+        #         local_path_str = output_node_id_to_local_path_map.get(node_id)
+        #         if local_path_str == None:
+        #             continue
+        #         local_path = LocalFile(path=os.path.join("outputs", output_node_id_to_local_path_map.get(node_id)))
+        #         remote_file = remote_file.to_remote_file()
+        #         # Save the remote image locally, if it needs to be saved.
+        #         self.download_file(remote_file, local_path)

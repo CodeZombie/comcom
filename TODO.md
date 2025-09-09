@@ -82,3 +82,7 @@ It would be incredibly useful to have some special syntax highlighting in vscode
 At minimum, some special highlighting for the different sections (values, load, input, output) of recipes.
 However, if at all possible, it would be excellent to turn this into an entire extension that resolves values on the fly to show you
 what your values will look like after interpolation, AND to hightlight errors/cycles.
+
+# NAMING
+- Consider renaming the `outputs` folder to `workspace` to better reflect the fact that you will be working in there.
+- This is also the place where you will be putting reference photos `outputs/references`

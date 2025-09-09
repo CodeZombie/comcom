@@ -9,10 +9,10 @@ from .dot_dict import DotDict
 
 def nested_replace(dictionary: Dict, substring: str, replace_with: str) -> Dict:
     for key in dictionary.keys():
-        if isinstance(dictionary[key], str):
-            dictionary[key] = dictionary[key].replace(substring, replace_with)
-        elif isinstance(dictionary[key], Dict):
+        if isinstance(dictionary[key], Dict):
             dictionary[key] = nested_replace(dictionary[key], substring, replace_with)
+        else:
+            dictionary[key] = dictionary[key].replace(substring, replace_with)
     return dictionary
 
 def deep_merge_dicts(dict1, dict2):
@@ -39,6 +39,21 @@ class TemplateDictSolver:
     max_iterations: int = 16
     ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN = "_!*COMCOM_OPEN_ESCAPE_CURLY_BRACKET*!_"
     ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED = "_!*COMCOM_CLOSED_ESCAPE_CURLY_BRACKET*!_"
+
+
+    @classmethod
+    def _get_unresolved_placeholders_from_value(cls, value: str | List) -> List:
+        if isinstance(value, str):
+            return list(itertools.chain(*TemplateDictSolver.placeholder_pattern.findall(value)))
+        if isinstance(value, list):
+            unresolved_placeholders: List = []
+            for item in value:
+                if isinstance(item, str):
+                    unresolved_placeholders.extend(list(itertools.chain(*TemplateDictSolver.placeholder_pattern.findall(item))))
+            return unresolved_placeholders
+        return []
+
+
 
     @classmethod
     def get_unresolved_placeholder_map(cls, data: Dict) -> Tuple[Dict[str, List[str]], int]:
@@ -70,12 +85,17 @@ class TemplateDictSolver:
         unresolved_placeholders = {}
         for key in data.keys():
             unresolved_placeholders[key] = []
-            if isinstance(data[key], str):
-                unresolved_placeholders[key] = list(itertools.chain(*TemplateDictSolver.placeholder_pattern.findall(data[key])))
+            # if isinstance(data[key], str):
+            #     unresolved_placeholders[key] = list(itertools.chain(*TemplateDictSolver.placeholder_pattern.findall(data[key])))
+            # elif isinstance(data[key], list):
+
             if isinstance(data[key], Dict):
                 sub_unresolved_placeholder_map, _ = TemplateDictSolver.get_unresolved_placeholder_map(data[key])
                 for subdotdict_key in sub_unresolved_placeholder_map.keys():
-                    unresolved_placeholders["{}.{}".format(key, subdotdict_key)] = sub_unresolved_placeholder_map[subdotdict_key] 
+                    unresolved_placeholders["{}.{}".format(key, subdotdict_key)] = sub_unresolved_placeholder_map[subdotdict_key]
+            else:
+                unresolved_placeholders[key] = cls._get_unresolved_placeholders_from_value(data[key])
+
         s = ""
         for key in unresolved_placeholders.keys():
             s += "{}::{}".format(key, ''.join(k for k in unresolved_placeholders[key]))
@@ -125,29 +145,6 @@ class TemplateDictSolver:
         dot_dict_data_source: DotDict = DotDict(data_source)
 
         for key in data.keys():
-            if isinstance(data[key], str):
-                try:
-                    if data[key].startswith('$'):
-                        key_path = data[key][1:].split('.')
-                        value = dot_dict_data_source
-                        for v in key_path:
-                            if v not in value.keys():
-                                raise KeyError(data[key][1:])
-                            value = value.get(v, None)
-                        data[key] = value
-                    else:
-                        data[key] = data[key] \
-                        .replace("{{", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN) \
-                        .replace("}}", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED) \
-                        .format(**dot_dict_data_source) \
-                        .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN, "{{") \
-                        .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED, "}}")
-                except (KeyError, AttributeError) as e:
-                    raise InvalidKeyException(
-                        entry_key=key, 
-                        invalid_key=str(e), 
-                        template_string=data[key], 
-                        available_keys=dot_dict_data_source.get_flattened_keys())
             if isinstance(data[key], dict):
                 try:
                     TemplateDictSolver._in_place_solve_step(data[key], data_source) #data[key].__interior_solve_interpolations(data_source) #  | {'^': self}
@@ -157,3 +154,39 @@ class TemplateDictSolver:
                         invalid_key=e.invalid_key, 
                         template_string=e.template_string,
                         available_keys=e.available_keys)
+            else:
+                try:
+                    data[key] = cls._value_solve_step(data[key], dot_dict_data_source)
+                except (KeyError, AttributeError) as e:
+                    raise InvalidKeyException(
+                        entry_key=key, 
+                        invalid_key=str(e), 
+                        template_string=data[key], 
+                        available_keys=dot_dict_data_source.get_flattened_keys())
+    @classmethod
+    def _value_solve_step(cls, value: str | List[str], dot_dict_data_source: DotDict):
+        if isinstance(value, str):
+            if value.startswith('$'):
+                key_path = value[1:].split('.')
+                dot_dict_value = dot_dict_data_source
+                # Traverse the key path against dot_dict_data_source
+                for v in key_path:
+                    if v not in dot_dict_value.keys():
+                        raise KeyError(value[1:])
+                    dot_dict_value = dot_dict_value.get(v, None)
+                value = dot_dict_value
+            else:
+                value = value \
+                .replace("{{", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN) \
+                .replace("}}", TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED) \
+                .format(**dot_dict_data_source) \
+                .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_OPEN, "{{") \
+                .replace(TemplateDictSolver.ESCAPED_CURLY_BRACKET_PLACEHOLDER_CLOSED, "}}")
+            return value
+        elif isinstance(value, List):
+            output: List[str] = []
+            for item in value:
+                output.append(cls._value_solve_step(item, dot_dict_data_source))
+            return output
+        
+        return value
