@@ -3,6 +3,7 @@ from typing import Dict, Any, Self, List, Optional, Tuple
 from typing_extensions import TypeAliasType
 from pydantic import BaseModel, field_validator, SkipValidation
 import os
+import copy
 from rich.console import Console
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def deep_merge_dicts(dict1, dict2):
     Values from dict2 will overwrite values from dict1 in case of conflicts,
     unless both values are dictionaries, in which case they are merged recursively.
     """
-    merged_dict = dict1.copy()
+    merged_dict = copy.deepcopy(dict1)
 
     for key, value in dict2.items():
         if key in merged_dict and isinstance(merged_dict[key], dict) and isinstance(value, dict):
@@ -59,6 +60,20 @@ class Recipe(BaseModel):
     @property
     def is_executable(self):
         return self.workflow != None
+    
+    def __str__(self):
+        s = "~ {}\n".format(self.id)
+        s += "~ Load:\n"
+        for k, v in self.load.items():
+            s += "~    {}: {}\n".format(k, v)
+        s += "~ Nodes:\n"
+        for k, v in self.nodes.items():
+            s += "~    {}: {}\n".format(k, v)
+        s += "~ Save:\n"
+        for k, v in self.save.items():
+            s += "~    {}: {}\n".format(k, v)
+        return s
+
 
     def model_post_init(self, __context):
         for recipe_id, recipe in self.recipes.items():
@@ -69,7 +84,7 @@ class Recipe(BaseModel):
         parent_values_without_grandparent.pop('^', None)
         try:
             self.values = TemplateDictSolver.solve(self.values, parent_values_without_grandparent | {'^': parent_values})
-            self.load = TemplateDictSolver.solve(self.load, parent_values_without_grandparent | {'^': parent_values})
+            self.load = TemplateDictSolver.solve(self.load, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
             self.nodes = TemplateDictSolver.solve(self.nodes, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
             self.save = TemplateDictSolver.solve(self.save, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
         except (InvalidKeyException, LoopDetectedException) as e:

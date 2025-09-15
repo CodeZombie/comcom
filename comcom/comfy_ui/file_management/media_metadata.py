@@ -16,6 +16,7 @@ class MediaMetadata(BaseModel):
 
     @field_validator('local_path', mode='before')
     @classmethod
+    # TODO: fix this function signature. it's not a local_path_str any more, and i dont think it can ever be type LocalFile
     def _filepath_str_to_localfile(cls, local_path_str: Dict | LocalFile) -> LocalFile | None:
         if isinstance(local_path_str, LocalFile):
             return local_path_str

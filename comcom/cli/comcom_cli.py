@@ -11,6 +11,8 @@ from rich.live import Live
 
 from comcom.playbook.template_solver.exceptions import InvalidKeyException, LoopDetectedException
 
+from comcom.playbook.recipe import Recipe
+from comcom.playbook.deep_yaml import deep_yaml_load
 
 from comcom.comfy_ui.server.exceptions import ComfyConnectionError, ComfyServerError, PromptExecutionError
 
@@ -37,7 +39,7 @@ FUN_EMOJIS = [
     ]
 
 class ComComCLI:
-    def __init__(self, comcom: ComCom, project_directory: str, recipe_file: str, recipe_path: str, no_input: bool, recursive=False):
+    def __init__(self, comcom: ComCom, project_directory: str, recipe_file: str, recipe_path: str, no_input: bool, recursive=False, debug_recipe=None):
         self.console = Console()
         self.comcom = comcom
 
@@ -75,7 +77,7 @@ class ComComCLI:
                 if selected_recipe_value.isnumeric() and int(selected_recipe_value) > 0 and int(selected_recipe_value) <= len(comcom.recipe_files):
                     selected_recipe_value = comcom.recipe_files[int(selected_recipe_value) - 1]
                     
-                if comcom.select_recipe_file(selected_recipe_value):
+                if comcom.select_recipe_file(selected_recipe_value, and_solve=not debug_recipe):
                     break
                 self.console.print("[red]Invalid recipe file name or index: {}".format(selected_recipe_value))
 
@@ -83,6 +85,16 @@ class ComComCLI:
             raise ComComCLIException("[red]No playbook specified[/]. Please specify a playbook file by name using the [green]--playbook[/] argument")
 
         self.console.print("Set [bold]recipe file[/] to [cyan]{}.yaml[/]\n".format(comcom.selected_recipe.id))
+
+        if debug_recipe:
+            import json
+            self.console.print(f"Saving compiled recipe to {debug_recipe}")
+            full_recipe_path: str = os.path.join(project_directory, selected_recipe_value + ".yaml")
+            compiled_recipe = json.loads(json.dumps(deep_yaml_load(open(full_recipe_path, 'r').read())))
+            with open(debug_recipe, 'w') as f:
+                yaml.dump(compiled_recipe, f)
+            return None
+
 
         recipe = None
         if recipe_path:

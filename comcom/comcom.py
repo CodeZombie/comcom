@@ -59,17 +59,24 @@ class ComCom:
     def selected_recipe(self):
         return self._selected_recipe
     
-    def select_recipe_file(self, recipe_file: str) -> bool:
+    def select_recipe_file(self, recipe_file: str, and_solve=True) -> bool:
         if recipe_file not in self.recipe_files:
             return False
         full_recipe_path: str = os.path.join(self._project_root_path, recipe_file + ".yaml")
+        import json
         self._selected_recipe = Recipe.model_validate(deep_yaml_load(open(full_recipe_path, 'r').read()))
         self._selected_recipe.id = recipe_file
-        self._selected_recipe.solve({})
+        if and_solve:
+            self._selected_recipe.solve({})
         return True
     
     def execute_recipe(self, recipe: Recipe, on_progress_callable: Callable) -> Dict:
-        local_path_to_remote_file_map = self.comfy_server.execute_recipe(recipe, on_progress_callable)
+        print(str(recipe))
+        try:
+            local_path_to_remote_file_map = self.comfy_server.execute_recipe(recipe, on_progress_callable)
+        except FileNotFoundError as e:
+            raise Exception("File \"{}\" not found from recipe \"{}\"".format(str(e), recipe.id))
+
         # NOTE: FILE SAVING SHOULD NOT HAPPEN HERE.
         # FILE SAVING SHOULD HAPPEN AT THE END OF submit_workflow_instance IN `SERVER`.
 

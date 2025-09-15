@@ -39,7 +39,7 @@ class DotDict(dict):
     
     @property
     def str_csv(self):
-        values: List[str] = self.get_deep_str_values()
+        values: List[str] = [v for v in self.get_deep_str_values() if v]
         return ', '.join(values)
 
     def to_dict(self) -> Dict:

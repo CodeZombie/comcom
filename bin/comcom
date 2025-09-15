@@ -13,6 +13,7 @@ def parse_comcom_cli_args():
     parser.add_argument('--recipe-path', '-p', default=None, required=False)
     parser.add_argument('--recursive', '-r', default=False, required=False) # if true, will execute the selected workflow and _all_ children.
     parser.add_argument('--no-input', '-n', action='store_true', default=False, required=False, help='Do not ask for input in the case of missing data. Instead, just fail.')
+    parser.add_argument('--debug-recipe', '-d', default=None, required=False, help="Compiles a recipe and saves it to disk as the provided filename.")
     return parser.parse_args()
 
 
@@ -37,7 +38,8 @@ def main():
             recipe_file=cli_args.recipe_file,
             recipe_path=cli_args.recipe_path,
             no_input=cli_args.no_input,
-            recursive=cli_args.recursive
+            recursive=cli_args.recursive,
+            debug_recipe=cli_args.debug_recipe,
         )
     except ComComCLIException as e:
         Console().print(str(e))

@@ -55,6 +55,9 @@ def _process_level(current_level_dict: dict, parent_node: dict):
     properties = {k: v for k, v in current_level_dict.items() if isinstance(k, str)}
     paths = {k: v for k, v in current_level_dict.items() if isinstance(k, tuple)}
 
+    properties = copy.deepcopy(properties)
+    paths = copy.deepcopy(paths)
+
     #parent_node.update(properties)
     node_deep_merge(properties, parent_node)
 
@@ -162,7 +165,7 @@ class CircularDetectConstructor(SafeConstructor):
         self.processing_stack.pop()
         return mapping
     
-class DeepMergeLoader(yaml.SafeLoader, CircularDetectConstructor):
+class DeepMergeLoader(yaml.FullLoader, CircularDetectConstructor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.processing_stack = []
