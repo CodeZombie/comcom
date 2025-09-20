@@ -71,23 +71,10 @@ class ComCom:
         return True
     
     def execute_recipe(self, recipe: Recipe, on_progress_callable: Callable) -> Dict:
-        print(str(recipe))
-        try:
-            local_path_to_remote_file_map = self.comfy_server.execute_recipe(recipe, on_progress_callable)
-        except FileNotFoundError as e:
-            raise Exception("File \"{}\" not found from recipe \"{}\"".format(str(e), recipe.id))
-
-        # NOTE: FILE SAVING SHOULD NOT HAPPEN HERE.
-        # FILE SAVING SHOULD HAPPEN AT THE END OF submit_workflow_instance IN `SERVER`.
-
-        # for local_path, remote_file in local_path_to_remote_file_map.items():
-        #     save_remote_image_locally(remote_file.full_filepath, remote_file.filename + " [output]", local_path, 'png')
-
-    # def execute_recipe_by_path(self, recipe_path: str | List[str], on_progress_callable: Callable) -> Dict:
-    #     return self.submit_recipe(
-    #         self.get_workflow_by_path(recipe_path), 
-    #         on_progress_callable
-    #     )
+        if recipe.is_dirty:
+            self.comfy_server.execute_recipe(recipe, on_progress_callable)
+        else:
+            print(f"Recipe {recipe.id} does not need to run. Skipping...")
     
     def get_recipe(self, recipe_path: str):
         recipe_path = recipe_path.split('.')

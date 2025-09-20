@@ -79,7 +79,6 @@ class ComfyServer:
             image_data=local_file.data)
         upload_image_uri = f"http://{self._url_without_protocol}/{request_model.endpoint}"
         try:
-            # TODO: Figure how how to make post requests lol
             http_response = requests.post(
                 upload_image_uri, 
                 files=request_model.files, 
@@ -125,8 +124,8 @@ class ComfyServer:
         # upload the file to the server
         return self.upload_image(local_file)
     
-    def download_file(self, target: RemoteFile, destination: LocalFile) -> LocalFile:
-        print("Downloading {}...".format(target.filename))
+    def download_file(self, target: RemoteFile, destination: LocalFile, recipe: Recipe) -> LocalFile:
+        print("Saving {} to {}".format(target.filename, destination.path_str))
         remote_data = urllib.request.urlopen(target.get_full_uri(self._url_with_protocol)).read()
         remote_file_hash = hashlib.sha1(remote_data).hexdigest()
         if destination.metadata_file_exists and destination.sha1 == remote_file_hash:
@@ -138,6 +137,7 @@ class ComfyServer:
         with open(destination.path_str, 'wb') as f:
             f.write(remote_data)
         metadata = MediaMetadata.from_local_and_remote_files(local_file=destination, remote_file=target)
+        metadata.recipe_hash = recipe.sha1
         metadata.save()
         
 
@@ -228,9 +228,11 @@ class ComfyServer:
             raise e # TODO: better error reporting
         
         output_nodes = prompt_history_response.get_output_nodes_from_prompt_id(prompt_id)
+        print("output_nodes = {}".format(output_nodes))
         for save_file_request in save_file_requests:
             if not save_file_request.local_path:
                 continue
+            print("save_file_request.output_node_id = {}".format(save_file_request.output_node_id))
             if save_file_request.output_node_id in output_nodes.keys():
                 file_path = os.path.join("outputs", save_file_request.local_path)
                 local_path = LocalFile(
@@ -242,7 +244,7 @@ class ComfyServer:
                 for i in range(len(prompt_history_response_model_node.images)):
                     remote_file = prompt_history_response_model_node.images[i].to_remote_file()
                     if i == 0:
-                        self.download_file(remote_file, local_path)
+                        self.download_file(remote_file, local_path, recipe)
                     else:
                         local_path_enumerate: LocalFile = deepcopy(local_path)
                         local_path_enumerate.path.name += "_{}".format(str(i))

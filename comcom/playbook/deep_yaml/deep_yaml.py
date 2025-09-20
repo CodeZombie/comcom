@@ -3,6 +3,7 @@ from yaml.constructor import SafeConstructor
 from yaml.nodes import Node, SequenceNode, ScalarNode, MappingNode
 import copy
 import os
+from rich.console import Console
 
 def unflatten_data(data_dict: dict) -> dict:
     """
@@ -60,6 +61,8 @@ def _process_level(current_level_dict: dict, parent_node: dict):
 
     #parent_node.update(properties)
     node_deep_merge(properties, parent_node)
+    
+    console = Console()
 
     for path_parts, value in paths.items():
         parts = path_parts
@@ -79,6 +82,7 @@ def deep_merge(base, overrides):
     """
     Returns a new dictionary representing the deep merge of base and overrides.
     """
+    overrides = copy.deepcopy(overrides)
     result = copy.deepcopy(base)
 
     for key, value in overrides.items():
@@ -105,6 +109,7 @@ def construct_reference(loader, node):
 
     data = {}
 
+
     # Get the directory of the current YAML file to resolve relative paths
     current_file_path = loader.name
     base_dir = os.path.dirname(current_file_path)
@@ -127,7 +132,9 @@ def construct_reference(loader, node):
                 # Load the referenced file using a new instance of the same Loader class.
                 # This ensures that !reference tags and other custom logic
                 # work recursively and consistently
-                data = deep_merge(data, yaml.load(f, Loader=type(loader)))
+                
+                #data = deep_merge(yaml.load(f, Loader=DeepMergeLoader), data)
+                data = deep_merge(deep_yaml_load(f.read()), data)
         except FileNotFoundError:
             raise yaml.constructor.ConstructorError(
                 f"Referenced file not found: '{filename}'",
@@ -213,18 +220,57 @@ DeepMergeLoader.add_constructor('tag:yaml.org,2002:seq', construct_tuple)
 #     unflattened_data = unflatten_data(data)
 #     return unflattened_data
 
+def resolve_merge_key(data):
+    """
+    Recursively resolves a data structure by deep-merging dictionaries 
+    found under the '<<<' key into their parent dictionary.
+    """
+    
+    # --- Handle Base Cases ---
+    
+    # If it's a list, recurse on each item
+    if isinstance(data, list):
+        return [resolve_merge_key(item) for item in data]
+    
+    # If it's not a dict (or list), return it as-is (e.g., int, str)
+    if not isinstance(data, dict):
+        return data
+
+    # --- Handle Dictionaries ---
+    
+    # It's a dictionary.
+    # Step 1: Recursively resolve all its child values *first*.
+    # This ensures that any nested '<<<' keys are handled before
+    # we process the '<<<' key at the current level.
+    resolved_children = {}
+    for key, value in data.items():
+        resolved_children[key] = resolve_merge_key(value)
+
+    # Step 2: Now that all children are resolved, handle the merge
+    # at *this* level.
+    
+    # Start with the base dict (from '<<<'), if it exists and is a dict
+    base = {}
+    if '<<<' in resolved_children:
+        # Get the resolved value of '<<<' and remove it from children
+        merge_val = resolved_children.pop('<<<')
+        if isinstance(merge_val, dict):
+            base = merge_val  # This is our starting point
+
+    # Step 3: Deep-merge the remaining items (the parent's keys)
+    # *onto* the base. `resolved_children` now only contains the
+    # parent's keys and their *already resolved* values.
+    final_result = deep_merge(base, resolved_children)
+    
+    return final_result
+
 
 def deep_yaml_load(yaml_str: str):
-    from rich.console import Console
-    Console().print()
-    data: dict = yaml.load(yaml_str, Loader=DeepMergeLoader)
-    imports = data.get('<<<')
     
-    if imports:
-        if not isinstance(imports, list):
-            imports = [imports]
-        for imported_data in imports:
-            data = deep_merge(imported_data, data)
-            
+    console = Console()
+    console.print()
+    data: dict = yaml.load(yaml_str, Loader=DeepMergeLoader)
+    data = resolve_merge_key(data)
+
     unflattened_data = unflatten_data(data)
     return unflattened_data

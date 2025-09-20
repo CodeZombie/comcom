@@ -77,7 +77,7 @@ class ComComCLI:
                 if selected_recipe_value.isnumeric() and int(selected_recipe_value) > 0 and int(selected_recipe_value) <= len(comcom.recipe_files):
                     selected_recipe_value = comcom.recipe_files[int(selected_recipe_value) - 1]
                     
-                if comcom.select_recipe_file(selected_recipe_value, and_solve=not debug_recipe):
+                if comcom.select_recipe_file(selected_recipe_value):
                     break
                 self.console.print("[red]Invalid recipe file name or index: {}".format(selected_recipe_value))
 
@@ -87,13 +87,17 @@ class ComComCLI:
         self.console.print("Set [bold]recipe file[/] to [cyan]{}.yaml[/]\n".format(comcom.selected_recipe.id))
 
         if debug_recipe:
-            import json
-            self.console.print(f"Saving compiled recipe to {debug_recipe}")
-            full_recipe_path: str = os.path.join(project_directory, selected_recipe_value + ".yaml")
-            compiled_recipe = json.loads(json.dumps(deep_yaml_load(open(full_recipe_path, 'r').read())))
+            # import json
+            # self.console.print(f"Saving compiled recipe to {debug_recipe}")
+            # full_recipe_path: str = os.path.join(project_directory, selected_recipe_value + ".yaml")
+            # yaml_dict = deep_yaml_load(open(full_recipe_path, 'r').read())
+            # print(yaml_dict)
+            # compiled_recipe = json.loads(json.dumps(yaml_dict))
+            # with open(debug_recipe, 'w') as f:
+            #     yaml.dump(compiled_recipe, f)
+            # return None
             with open(debug_recipe, 'w') as f:
-                yaml.dump(compiled_recipe, f)
-            return None
+                yaml.dump(dict(comcom.selected_recipe), f)
 
 
         recipe = None
@@ -102,17 +106,28 @@ class ComComCLI:
         if not recipe:
             if no_input:
                 raise ComComCLIException("[red]Invalid recipe path:[/] \"{}\"".format(recipe_path))
-            flattened_recipe_paths = [comcom.selected_recipe.id] if comcom.selected_recipe.is_executable else []
-            flattened_recipe_paths.extend(list(comcom.selected_recipe.get_executable_flattened_children().keys()))
-            if len(flattened_recipe_paths) == 0:
+            indented_recipes = comcom.selected_recipe.get_indented_children()
+
+            #flattened_recipe_paths = [comcom.selected_recipe.id] if comcom.selected_recipe.is_executable else []
+            #flattened_recipe_paths.extend(list(comcom.selected_recipe.get_executable_flattened_children().keys()))
+            if len(indented_recipes) == 0:
                 raise ComComCLIException("Recipe file \"{}\" is not executable and has no executable recipes.".format(comcom.selected_recipe.id))
+
             self.console.print("Select a recipe from {}:".format(comcom.selected_recipe.id))
-            for index, value in enumerate(flattened_recipe_paths):
-                self.console.print("  [yellow]{}[/]: [bold]{}[/]".format(index + 1, value))
+            indented_recipe_names = [v[0] for v in indented_recipes]
+            for index, value in enumerate(indented_recipe_names):
+                is_dirty = indented_recipes[index][1].is_dirty
+                self.console.print("  [yellow]{:03d}[/]: [{}][bold]{}[/][/]".format(
+                    index + 1,
+                    "red" if is_dirty else "blue", 
+                    value))
             while recipe is None:
                 selected_recipe_path_value = Prompt.ask("  [bold]Recipe[/] [gray](name or index)[/]: ", default="1")
-                if selected_recipe_path_value.isnumeric() and int(selected_recipe_path_value) > 0 and int(selected_recipe_path_value) <= len(flattened_recipe_paths):
-                    selected_recipe_path_value = flattened_recipe_paths[int(selected_recipe_path_value) - 1]
+                if selected_recipe_path_value.isnumeric() and int(selected_recipe_path_value) > 0 and int(selected_recipe_path_value) <= len(indented_recipe_names):
+                    recipe = indented_recipes[int(selected_recipe_path_value) - 1][1]
+                    #selected_recipe_path_value = indented_recipe_names[int(selected_recipe_path_value) - 1]
+                    if recipe:
+                        break
 
                 recipe = comcom.get_recipe(selected_recipe_path_value)
                 if recipe:

@@ -4,8 +4,12 @@ from typing_extensions import TypeAliasType
 from pydantic import BaseModel, field_validator, SkipValidation
 import os
 import copy
+import hashlib
+import json
 from rich.console import Console
 from pathlib import Path
+from comcom.comfy_ui.file_management.local_file import LocalFile
+from comcom.comfy_ui.file_management.media_metadata import MediaMetadata
 
 from comcom.playbook.utils.dict_utils import flatten_dict
 from comcom.playbook.template_solver.template_dict_solver import TemplateDictSolver
@@ -14,6 +18,31 @@ from comcom.comfy_ui.models.raw.workflow.version_0_4.workflow import Comfy_V0_4_
 from comcom.comfy_ui.models.normalized.node_definition.node_definition import NormalizedNodeDefinition
 
 from comcom.playbook.exceptions import InvalidNodeInWorkflowExceptionc
+
+def get_sha1_of_file(filepath, chunk_size=4096):
+    """
+    Calculates the SHA-1 hash of a file's contents.
+
+    Args:
+        filepath (str): The path to the file.
+        chunk_size (int): The size of chunks to read from the file (in bytes).
+
+    Returns:
+        str: The hexadecimal representation of the SHA-1 hash.
+    """
+    sha1_hash = hashlib.sha1()
+    try:
+        with open(filepath, 'rb') as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break  # End of file
+                sha1_hash.update(chunk)
+        return sha1_hash.hexdigest()
+    except FileNotFoundError:
+        return "File not found."
+    except Exception as e:
+        return f"An error occurred: {e}"
 
 def deep_merge_dicts(dict1, dict2):
     """
@@ -38,6 +67,10 @@ class SaveFileRequest:
     local_path: str
     requires_editing: bool = False
 
+TemplatesDict = TypeAliasType(
+    'TemplatesDict',
+    'Dict[str, str | TemplatesDict]'
+)
 
 ValidPrimativeTypes = TypeAliasType(
     'ValidPrimativeTypes',
@@ -48,6 +81,8 @@ ValuesDict = TypeAliasType(
     'Dict[str,  ValidPrimativeTypes | ValuesDict] | ValidPrimativeTypes'
 )
 
+
+
 class Recipe(BaseModel):
     id: Optional[str | None] = "root"
     workflow: Optional[str | None] = None
@@ -56,11 +91,62 @@ class Recipe(BaseModel):
     nodes: Optional[Dict[str, ValuesDict]] = {}
     save: Optional[Dict[str, str | Dict[str, str | List]]] = {}
     recipes: Optional[Dict[str, Self]] = {}
+    templates: Optional[TemplatesDict] = {}
 
     @property
     def is_executable(self):
         return self.workflow != None
+
+    @property
+    def sha1(self):
+        recipe_hash = ""
+        if self.workflow:
+            recipe_hash = get_sha1_of_file(self.workflow)
+        recipe_hash += hashlib.sha1(json.dumps(self.values, sort_keys=True).encode('utf-8')).hexdigest()
+        recipe_hash += hashlib.sha1(json.dumps(self.load, sort_keys=True).encode('utf-8')).hexdigest()
+        recipe_hash += hashlib.sha1(json.dumps(self.nodes, sort_keys=True).encode('utf-8')).hexdigest()
+        recipe_hash += hashlib.sha1(json.dumps(self.save, sort_keys=True).encode('utf-8')).hexdigest()
+        return hashlib.sha1(recipe_hash.encode('utf-8')).hexdigest()
     
+    @property
+    def is_dirty(self):
+        this_recipe_hash = self.sha1
+        for save_file in self.save.values():
+            if isinstance(save_file, str):
+                save_filepath = save_file
+            else:
+                save_filepath = save_file.get('filename')
+            local_filepath = os.path.join("outputs", save_filepath)
+            if not os.path.exists(local_filepath):
+                return True
+            local_file = LocalFile(path=local_filepath)
+            if not local_file:
+                print("Save file \"{}\" does not exist. Re-running".format(local_file.path_str))
+                return True
+            if not os.path.exists(local_file.metadata_path):
+                return True
+            metadata = MediaMetadata.from_file(local_file.metadata_path)
+            if not metadata:
+                print("Save file \"{}\" has no metadata file. Re-running".format(local_file.path_str))
+                return True
+            if metadata.sha1 != local_file.sha1:
+                print("Save file \"{}\"'s sha1 ({}) does not match the sha1 in the metadata ({}). Re-running".format(local_file.path_str, local_file.sha1, metadata.sha1))
+                return True
+            if metadata.recipe_hash != None and metadata.recipe_hash != this_recipe_hash:
+                print("Metadata recipe hash ({}) does not match the actual recipe hash ({}). Rerunning.".format(metadata.recipe_hash, this_recipe_hash))
+                return True
+        for load_filepath in self.load.values():
+            local_filepath = os.path.join("outputs", load_filepath)
+            if not os.path.exists(local_filepath):
+                return False
+            local_file = LocalFile(path=local_filepath)
+            metadata = MediaMetadata.from_file(local_file.metadata_path)
+            if not metadata:
+                return True
+            if metadata.sha1 != local_file.sha1:
+                return True
+        return False
+
     def __str__(self):
         s = "~ {}\n".format(self.id)
         s += "~ Load:\n"
@@ -79,21 +165,27 @@ class Recipe(BaseModel):
         for recipe_id, recipe in self.recipes.items():
             recipe.id = recipe_id
 
-    def solve(self, parent_values: Dict = {}):
+    def solve(self, parent_values: Dict = {}, parent_templates: Dict = {}):
+        active_templates: Dict = deep_merge_dicts(parent_templates, self.templates)
         parent_values_without_grandparent = parent_values.copy()
         parent_values_without_grandparent.pop('^', None)
         try:
-            self.values = TemplateDictSolver.solve(self.values, parent_values_without_grandparent | {'^': parent_values})
-            self.load = TemplateDictSolver.solve(self.load, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
-            self.nodes = TemplateDictSolver.solve(self.nodes, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
-            self.save = TemplateDictSolver.solve(self.save, deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values})
+            self.values = TemplateDictSolver.solve(self.values, deep_merge_dicts(self.templates, parent_values_without_grandparent) | {'^': parent_values})
+
+            generational_values: Dict = deep_merge_dicts(parent_values_without_grandparent, self.values)
+            self.load = TemplateDictSolver.solve(self.load, deep_merge_dicts(active_templates, generational_values) | {'^': parent_values})
+            self.nodes = TemplateDictSolver.solve(self.nodes, deep_merge_dicts(active_templates, generational_values) | {'^': parent_values})
+            self.save = TemplateDictSolver.solve(self.save, deep_merge_dicts(active_templates, generational_values) | {'^': parent_values})
         except (InvalidKeyException, LoopDetectedException) as e:
             e.recipe_path.insert(0, self.id)
             raise e
         
         for child_recipe in self.recipes.values():
             try:
-                child_recipe.solve(deep_merge_dicts(parent_values_without_grandparent, self.values) | {'^': parent_values } | {'nodes': self.nodes} | {'save': self.save} | {'load': self.load})
+                child_recipe.solve(
+                    generational_values | {'^': parent_values } | {'nodes': self.nodes} | {'save': self.save} | {'load': self.load},
+                    active_templates
+                    )
             except (InvalidKeyException, LoopDetectedException) as e:
                 e.recipe_path.insert(0, self.id)
                 raise e
@@ -243,6 +335,18 @@ class Recipe(BaseModel):
     def get_executable_flattened_children(self):
         flat_children = self.get_flattened_children()
         return {k: v for k, v in flat_children.items() if v.is_executable}
+    
+    def get_indented_children(self, indent: int = 0) -> Tuple[str, Self]:
+        recipes = []
+        recipes.append(
+            (
+                f"{"    " * indent}{self.id}",
+                self
+            )
+        )
+        for recipe in self.recipes.values():
+            recipes.extend(recipe.get_indented_children(indent + 1))
+        return recipes
 
     # def print(self, id, prfx=""):
     #     print("{}{}".format(prfx, id))

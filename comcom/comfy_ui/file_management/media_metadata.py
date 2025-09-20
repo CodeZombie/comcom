@@ -1,9 +1,8 @@
 from typing import Dict, Any, Self, Optional
 from pydantic import BaseModel, field_validator, field_serializer, SerializationInfo
 from datetime import datetime
-import hashlib
 import yaml
-import pathlib
+import os
 
 from comcom.comfy_ui.file_management.remote_file import RemoteFile
 from comcom.comfy_ui.file_management.local_file import LocalFile
@@ -12,6 +11,7 @@ class MediaMetadata(BaseModel):
     local_path: Optional[LocalFile] = None
     remote_file: Optional[RemoteFile] = None
     sha1: Optional[str] = None
+    recipe_hash: Optional[str] = None
     upload_time: Optional[datetime] = None
 
     @field_validator('local_path', mode='before')
@@ -34,7 +34,7 @@ class MediaMetadata(BaseModel):
        return False
 
     @classmethod
-    def from_file(cls, file_path: str) -> Self:
+    def from_file(cls, file_path: str) -> Self | None:
         return cls.model_validate(yaml.load(open(file_path, 'r').read(), Loader=yaml.FullLoader))
 
     def save(self):
@@ -46,10 +46,11 @@ class MediaMetadata(BaseModel):
         return self.sha1 != None
 
     @classmethod
-    def from_local_and_remote_files(cls, local_file: LocalFile, remote_file: RemoteFile):
+    def from_local_and_remote_files(cls, local_file: LocalFile, remote_file: RemoteFile, recipe_hash: str | None = None):
         return cls(
             local_path=local_file,
             remote_file=remote_file,
             sha1=local_file.sha1,
+            recipe_hash=recipe_hash,
             upload_time=datetime.now()
         )

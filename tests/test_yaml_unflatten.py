@@ -41,3 +41,27 @@ def test_yaml_a():
 
     william_pants = william_clothes['recipes']['pants']
     assert william_pants['color'] == "blue"
+
+YAML_TEST_B = """
+inventories:
+    inventory_a: &inventory_a
+        values:
+            inventory: "badge"
+templates:
+    outfit_a: &outfit_a
+        values:
+            outfit_name: "fbi_costume"
+
+            
+[costume]:
+    <<: *outfit_a
+    <<: *inventory_a
+"""
+
+def test_deep_yaml():
+    fbi_guy = deep_yaml_load(YAML_TEST_B)
+    print(fbi_guy)
+    assert fbi_guy['recipes']['costume']
+    assert fbi_guy['recipes']['costume']['values']
+    assert fbi_guy['recipes']['costume']['values']['outfit_name'] == "fbi_costume"
+    assert fbi_guy['recipes']['costume']['values']['inventory'] == "badge"

@@ -11,7 +11,7 @@ class LocalFile(BaseModel):
     @field_validator('path', mode='before')
     def _convert_path_str_to_path(cls, path_obj_or_str: Path | str) -> Path:
         if isinstance(path_obj_or_str, Path):
-            return Path
+            return path_obj_or_str
         return Path(path_obj_or_str)
     
     @field_serializer('path')
