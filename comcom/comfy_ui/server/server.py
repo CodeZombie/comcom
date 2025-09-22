@@ -6,6 +6,9 @@ import urllib.request
 import urllib.error
 import json
 import time
+import requests
+from PIL import Image
+from io import BytesIO
 import hashlib
 from copy import deepcopy
 import os
@@ -71,9 +74,12 @@ class ComfyServer:
     def _url_with_protocol(self):
         return 'http://' + self._url_without_protocol
     
+    def interrupt(self):
+        interrupt_url = f"http://{self._url_without_protocol}/api/interrupt"
+        return requests.post(interrupt_url)
+    
     def upload_image(self, local_file: LocalFile) -> RemoteFile:
-        import requests
-        
+
         request_model = self.interface_provider.ImageUploadRequestModel(
             filename=local_file.name, 
             image_data=local_file.data)
@@ -141,7 +147,7 @@ class ComfyServer:
         metadata.save()
         
 
-    def execute_recipe(self, recipe: Recipe, on_node_progress: Callable) -> List[MediaMetadata]:
+    def execute_recipe(self, recipe: Recipe, on_node_progress: Callable, on_preview_image: Callable | None = None) -> List[MediaMetadata]:
         # Upload all of the recipe's input images to the comfyui server, and swap the paths.
         load_key_to_remote_file: Dict[str: RemoteFile] = {}
         for load_key, local_file_str in recipe.load.items():
@@ -212,6 +218,18 @@ class ComfyServer:
                             if value is not None and max is not None and node is not None:
                                 on_node_progress(node, value, max)
                     else:
+                        # Non-string data, this is where preview images will be
+                        image = None
+                        try:
+                            image_bytes = BytesIO(out[8:])
+                            image = Image.open(image_bytes)
+                        except Exception as e:
+                            print("ERROR DECODING PREVIEW:")
+                            print(e)
+                            
+                        if image:
+                            on_preview_image(image)
+
                         continue
         finally:
             websocket_connection.close()
@@ -226,13 +244,11 @@ class ComfyServer:
             prompt_history_response = self.interface_provider.PromptHistoryResponseModel.model_validate_json(prompt_history_http_response)
         except ValidationError as e:
             raise e # TODO: better error reporting
-        
+        generated_image_urls = set()
         output_nodes = prompt_history_response.get_output_nodes_from_prompt_id(prompt_id)
-        print("output_nodes = {}".format(output_nodes))
         for save_file_request in save_file_requests:
             if not save_file_request.local_path:
                 continue
-            print("save_file_request.output_node_id = {}".format(save_file_request.output_node_id))
             if save_file_request.output_node_id in output_nodes.keys():
                 file_path = os.path.join("outputs", save_file_request.local_path)
                 local_path = LocalFile(
@@ -243,11 +259,13 @@ class ComfyServer:
                     raise Exception("ComfyUI Prompt Response did not contain an output node with id \"{}\"".format(save_file_request.output_node_id))
                 for i in range(len(prompt_history_response_model_node.images)):
                     remote_file = prompt_history_response_model_node.images[i].to_remote_file()
+                    generated_image_urls.add(remote_file.get_full_uri(self._url_with_protocol))
                     if i == 0:
                         self.download_file(remote_file, local_path, recipe)
                     else:
                         local_path_enumerate: LocalFile = deepcopy(local_path)
                         local_path_enumerate.path.name += "_{}".format(str(i))
+        return list(generated_image_urls)
 
 
         # for node_id, output in prompt_history_response.get_output_nodes_from_prompt_id(prompt_id).items():

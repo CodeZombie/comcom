@@ -5,6 +5,7 @@ import argparse
 from comcom.cli.comcom_cli import ComComCLI, ComComCLIException
 from comcom.comcom import ComCom
 from rich.console import Console
+from comcom.comcom_server.server import ComComServer
 
 def parse_comcom_cli_args():
     parser = argparse.ArgumentParser()
@@ -14,6 +15,7 @@ def parse_comcom_cli_args():
     parser.add_argument('--recursive', '-r', default=False, required=False) # if true, will execute the selected workflow and _all_ children.
     parser.add_argument('--no-input', '-n', action='store_true', default=False, required=False, help='Do not ask for input in the case of missing data. Instead, just fail.')
     parser.add_argument('--debug-recipe', '-d', default=None, required=False, help="Compiles a recipe and saves it to disk as the provided filename.")
+    parser.add_argument('--server', '-s', action='store_true', default=False, required=False, help="Starts ComCom in webserver mode.")
     return parser.parse_args()
 
 
@@ -23,12 +25,18 @@ def main():
 
     args, _ = parser.parse_known_args()
 
+
+
     if args.interactive:
         print("This would start comcom in interactive mode if that was implemented.")
         return
     
     # CLI MODE
     cli_args = parse_comcom_cli_args()
+
+    if cli_args.server:
+        server = ComComServer()
+        return
 
     comcom = ComCom()
     try:
@@ -46,5 +54,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ in ["__main__", "__mp_main__"]:
     main()

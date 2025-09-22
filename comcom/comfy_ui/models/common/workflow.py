@@ -13,6 +13,7 @@ class Workflow:
     nodes: List[Node]
 
     def get_node_by_id(self, id: str) -> Node:
+        print("get_node_by_id({})".format(id))
         return next((node for node in self.nodes if node.id == id), None)
     
     def get_nodes_by_title(self, title: str) -> List[Node]:

@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from typing import Dict, Any, Self, List, Optional, Tuple
 from typing_extensions import TypeAliasType
-from pydantic import BaseModel, field_validator, SkipValidation
+from pydantic import BaseModel, field_validator, SkipValidation, Field
 import os
 import copy
 import hashlib
+import uuid
 import json
 from rich.console import Console
 from pathlib import Path
@@ -84,6 +85,8 @@ ValuesDict = TypeAliasType(
 
 
 class Recipe(BaseModel):
+    uuid: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    global_id: Optional[str] = ""
     id: Optional[str | None] = "root"
     workflow: Optional[str | None] = None
     values: Optional[Dict[str, ValuesDict]] = {}
@@ -107,6 +110,26 @@ class Recipe(BaseModel):
         recipe_hash += hashlib.sha1(json.dumps(self.nodes, sort_keys=True).encode('utf-8')).hexdigest()
         recipe_hash += hashlib.sha1(json.dumps(self.save, sort_keys=True).encode('utf-8')).hexdigest()
         return hashlib.sha1(recipe_hash.encode('utf-8')).hexdigest()
+    
+    @property
+    def saved_media_metadata(self):
+        metadatas: Dict[str, MediaMetadata] = {}
+        for save_file in self.save.values():
+            if isinstance(save_file, str):
+                save_filepath = save_file
+            else:
+                save_filepath = save_file.get('filename')
+            local_filepath = os.path.join("outputs", save_filepath)
+            if not os.path.exists(local_filepath):
+                metadatas[save_filepath] = None
+                continue
+            local_file = LocalFile(path=local_filepath)
+            if not local_file or not os.path.exists(local_file.metadata_path):
+                metadatas[save_filepath] = None
+                continue
+            metadatas[save_filepath] = MediaMetadata.from_file(local_file.metadata_path)
+        return metadatas
+
     
     @property
     def is_dirty(self):
@@ -165,7 +188,8 @@ class Recipe(BaseModel):
         for recipe_id, recipe in self.recipes.items():
             recipe.id = recipe_id
 
-    def solve(self, parent_values: Dict = {}, parent_templates: Dict = {}):
+    def solve(self, parent_global_id: str = "", parent_values: Dict = {}, parent_templates: Dict = {}):
+        self.global_id = f"{parent_global_id}.{self.id}" if parent_global_id else self.id
         active_templates: Dict = deep_merge_dicts(parent_templates, self.templates)
         parent_values_without_grandparent = parent_values.copy()
         parent_values_without_grandparent.pop('^', None)
@@ -183,6 +207,7 @@ class Recipe(BaseModel):
         for child_recipe in self.recipes.values():
             try:
                 child_recipe.solve(
+                    self.global_id,
                     generational_values | {'^': parent_values } | {'nodes': self.nodes} | {'save': self.save} | {'load': self.load},
                     active_templates
                     )
@@ -347,6 +372,18 @@ class Recipe(BaseModel):
         for recipe in self.recipes.values():
             recipes.extend(recipe.get_indented_children(indent + 1))
         return recipes
+    
+    def get_recipes_by_uuid(self, uuids: List[str]) -> List[Self]:
+        found = []
+        if str(self.uuid) in uuids:
+            found.append(self)
+        
+        for child in self.recipes.values():
+            f = child.get_recipes_by_uuid(uuids)
+            if f:
+                found.extend(f)
+        return found
+
 
     # def print(self, id, prfx=""):
     #     print("{}{}".format(prfx, id))

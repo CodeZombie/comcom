@@ -67,7 +67,6 @@ def _process_level(current_level_dict: dict, parent_node: dict):
     for path_parts, value in paths.items():
         parts = path_parts
         current_node = parent_node
-        
         for part in parts:
             if 'recipes' not in current_node:
                 current_node['recipes'] = {}
@@ -127,7 +126,6 @@ def construct_reference(loader, node):
             )
 
         try:
-            print(os.path.abspath(referenced_path))
             with open(referenced_path, 'r') as f:
                 # Load the referenced file using a new instance of the same Loader class.
                 # This ensures that !reference tags and other custom logic
@@ -266,9 +264,6 @@ def resolve_merge_key(data):
 
 
 def deep_yaml_load(yaml_str: str):
-    
-    console = Console()
-    console.print()
     data: dict = yaml.load(yaml_str, Loader=DeepMergeLoader)
     data = resolve_merge_key(data)
 

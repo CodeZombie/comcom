@@ -67,14 +67,16 @@ class ComCom:
         self._selected_recipe = Recipe.model_validate(deep_yaml_load(open(full_recipe_path, 'r').read()))
         self._selected_recipe.id = recipe_file
         if and_solve:
-            self._selected_recipe.solve({})
+            self._selected_recipe.solve()
         return True
     
-    def execute_recipe(self, recipe: Recipe, on_progress_callable: Callable) -> Dict:
+    def execute_recipe(self, recipe: Recipe, on_progress_callable: Callable, on_preview_image: Callable | None = None) -> List[str]:
         if recipe.is_dirty:
-            self.comfy_server.execute_recipe(recipe, on_progress_callable)
+            generated_images = self.comfy_server.execute_recipe(recipe, on_progress_callable, on_preview_image)
+            return generated_images
         else:
             print(f"Recipe {recipe.id} does not need to run. Skipping...")
+        return []
     
     def get_recipe(self, recipe_path: str):
         recipe_path = recipe_path.split('.')
@@ -83,8 +85,10 @@ class ComCom:
             if len(recipe_path) == 1:
                 return self.selected_recipe 
             return self.selected_recipe.get_recipe(recipe_path[1:])
+        
+    def interrupt(self):
+        self.comfy_server.interrupt()
 
-    
     @property
     def playbook_path(self) -> str:
         return os.path.join(self.project_root_path, self.selected_recipe_file + ".yaml")

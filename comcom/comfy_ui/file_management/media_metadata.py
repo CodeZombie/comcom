@@ -25,6 +25,10 @@ class MediaMetadata(BaseModel):
     # @field_serializer('local_path')
     # def _serialize_path(self, lp: LocalFile, info: SerializationInfo) -> str:
     #     return lp.path_str
+
+    @property
+    def modified(self):
+        return self.sha1 != self.local_path.sha1
     
     @property
     def local_file_needs_to_be_edited_but_hasnt_been_edited_yet(self) -> bool:
