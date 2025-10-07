@@ -5,7 +5,7 @@ import argparse
 from comcom.cli.comcom_cli import ComComCLI, ComComCLIException
 from comcom.comcom import ComCom
 from rich.console import Console
-from comcom.comcom_server.server import ComComServer
+from comcom.comcom_server.server import start_server
 
 def parse_comcom_cli_args():
     parser = argparse.ArgumentParser()
@@ -35,7 +35,7 @@ def main():
     cli_args = parse_comcom_cli_args()
 
     if cli_args.server:
-        server = ComComServer()
+        start_server()
         return
 
     comcom = ComCom()

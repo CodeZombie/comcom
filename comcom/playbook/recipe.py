@@ -115,19 +115,23 @@ class Recipe(BaseModel):
     def saved_media_metadata(self):
         metadatas: Dict[str, MediaMetadata] = {}
         for save_file in self.save.values():
+            save_filepaths = []
             if isinstance(save_file, str):
-                save_filepath = save_file
+                save_filepaths.append(save_file)
             else:
-                save_filepath = save_file.get('filename')
-            local_filepath = os.path.join("outputs", save_filepath)
-            if not os.path.exists(local_filepath):
-                metadatas[save_filepath] = None
-                continue
-            local_file = LocalFile(path=local_filepath)
-            if not local_file or not os.path.exists(local_file.metadata_path):
-                metadatas[save_filepath] = None
-                continue
-            metadatas[save_filepath] = MediaMetadata.from_file(local_file.metadata_path)
+                save_filepaths.append(save_file.get('filename'))
+                for fp in save_file.get('requires_editing', []):
+                    save_filepaths.append(fp)
+            for save_filepath in save_filepaths:
+                local_filepath = os.path.join("outputs", save_filepath)
+                if not os.path.exists(local_filepath):
+                    metadatas[save_filepath] = None
+                    continue
+                local_file = LocalFile(path=local_filepath)
+                if not local_file or not os.path.exists(local_file.metadata_path):
+                    metadatas[save_filepath] = None
+                    continue
+                metadatas[save_filepath] = MediaMetadata.from_file(local_file.metadata_path)
         return metadatas
 
     
@@ -155,9 +159,13 @@ class Recipe(BaseModel):
             if metadata.sha1 != local_file.sha1:
                 print("Save file \"{}\"'s sha1 ({}) does not match the sha1 in the metadata ({}). Re-running".format(local_file.path_str, local_file.sha1, metadata.sha1))
                 return True
-            if metadata.recipe_hash != None and metadata.recipe_hash != this_recipe_hash:
+            if metadata.recipe_hash == None:
+                return True
+            if metadata.recipe_hash != this_recipe_hash:
                 print("Metadata recipe hash ({}) does not match the actual recipe hash ({}). Rerunning.".format(metadata.recipe_hash, this_recipe_hash))
                 return True
+            print(f"{save_filepath} is clean.")
+            print(f"metadata sha: {metadata.recipe_hash} ||| recipe sha1: {this_recipe_hash}")
         for load_filepath in self.load.values():
             local_filepath = os.path.join("outputs", load_filepath)
             if not os.path.exists(local_filepath):

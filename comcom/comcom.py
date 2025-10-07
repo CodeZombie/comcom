@@ -85,6 +85,7 @@ class ComCom:
             if len(recipe_path) == 1:
                 return self.selected_recipe 
             return self.selected_recipe.get_recipe(recipe_path[1:])
+        return None
         
     def interrupt(self):
         self.comfy_server.interrupt()

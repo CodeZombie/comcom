@@ -145,7 +145,14 @@ class ComfyServer:
         metadata = MediaMetadata.from_local_and_remote_files(local_file=destination, remote_file=target)
         metadata.recipe_hash = recipe.sha1
         metadata.save()
-        
+    
+    def get_preview_of_resolved_api_graph(self, recipe: Recipe) -> str:
+        load_key_to_remote_file: Dict[str: RemoteFile] = {}
+        for load_key, local_file_str in recipe.load.items():
+            local_file = LocalFile(path=os.path.join("outputs", local_file_str))
+            load_key_to_remote_file[load_key] = self.get_remote_file_from_local_file(local_file).api_name
+        api_dict, _ = recipe.to_api_dict(self.node_definitions, load_key_to_remote_file)
+        return json.dumps(api_dict)
 
     def execute_recipe(self, recipe: Recipe, on_node_progress: Callable, on_preview_image: Callable | None = None) -> List[MediaMetadata]:
         # Upload all of the recipe's input images to the comfyui server, and swap the paths.
